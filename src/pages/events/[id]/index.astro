@@ -1,0 +1,31 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+export function getStaticPaths() { return [{ params: { id: '1' } }]; }
+const { id } = Astro.params;
+---
+<AppLayout title="Nombre del evento">
+  <p>Fecha · Lugar · Categoría · Organizador</p>
+  <div class="grid">
+    <section class="box">
+      <h3>Descripción y notas</h3>
+      <p>Archivos, documentos y ubicaciones del evento.</p>
+      <h3>Asistentes</h3>
+      <div class="ph">Avatares</div>
+    </section>
+    <aside class="box">
+      <a href={`/events/${id}/route`} class="ph" style="text-decoration:none">Mini mapa — ver ruta</a>
+        <button class="btn" id="confirm">Confirmar asistencia</button>
+        <button class="btn out" id="invite">Invitar</button>
+        <button class="btn out" id="leave_event">Abandonar evento</button>
+    </aside>
+  </div>
+  <div class="row">
+    <a class="btn out" href={`/events/${id}/edit`}>Editar evento</a>
+    <button class="btn out">Dejar review</button>
+    <button class="btn out">Denunciar</button>
+  </div>
+
+  <script>
+    const AssistConfirm =  document.getElementById("confirm")
+  </script>
+</AppLayout>

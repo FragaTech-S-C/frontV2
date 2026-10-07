@@ -1,0 +1,23 @@
+---
+import Base from './Base.astro';
+const { title } = Astro.props;
+const path = Astro.url.pathname;
+const links = [
+  ['/dashboard', 'Dashboard'], ['/search', 'Buscar'], ['/groups', 'Grupos'],
+  ['/invitations', 'Invitaciones'], ['/profile', 'Perfil'],
+];
+---
+<Base title={title}>
+  <div class="app">
+    <nav class="nav" aria-label="Principal">
+      <span class="brand">Meetia</span>
+      {links.map(([href, label]) => (
+        <a href={href} aria-current={path.startsWith(href) ? 'page' : undefined}>{label}</a>
+      ))}
+    </nav>
+    <main class="main">
+      <h1>{title}</h1>
+      <slot />
+    </main>
+  </div>
+</Base>

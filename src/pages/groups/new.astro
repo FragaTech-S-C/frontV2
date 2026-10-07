@@ -1,0 +1,13 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+<AppLayout title="Nuevo grupo">
+  <form class="box">
+    <label>Nombre<input name="name" /></label>
+    <label>Tipo<select name="type"><option>Personal</option><option>Institucional (solo LEADER)</option></select></label>
+    <div class="row">
+      <button class="btn" type="submit">Crear grupo</button>
+      <a class="btn out" href="/groups">Cancelar</a>
+    </div>
+  </form>
+</AppLayout>

@@ -1,0 +1,20 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import EventCard from '@/components/EventCard.astro';
+export function getStaticPaths() { return [{ params: { id: '1' } }, { params: { id: '2' } }]; }
+---
+<AppLayout title="Nombre del grupo">
+  <div class="grid">
+    <section class="box">
+      <h3>Miembros</h3>
+      <div class="ph">Usuario · rol</div><div class="ph">Usuario · rol</div>
+      <button class="btn out">Añadir miembro (solo LEADER)</button>
+    </section>
+    <section class="box">
+      <h3>Eventos del grupo</h3>
+      <EventCard />
+      <a class="btn" href="/events/new">Nuevo evento</a>
+    </section>
+  </div>
+  <div class="row"><button class="btn out">Aceptar invitación</button><button class="btn out">Salir del grupo</button></div>
+</AppLayout>

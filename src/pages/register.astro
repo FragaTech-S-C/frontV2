@@ -1,0 +1,12 @@
+---
+import AuthLayout from '@/layouts/AuthLayout.astro';
+---
+<AuthLayout title="Crear cuenta">
+  <form class="box" style="border:0;padding:0;background:none">
+    <label>Nombre<input name="name" /></label>
+    <label>Email<input type="email" name="email" /></label>
+    <label>Contraseña<input type="password" name="password" /></label>
+    <button class="btn" type="submit">Registrarme</button>
+    <p>¿Ya tenés cuenta? <a href="/login">Iniciá sesión</a></p>
+  </form>
+</AuthLayout>

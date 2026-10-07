@@ -1,0 +1,12 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+<AppLayout title="Mi perfil">
+  <form class="box">
+    <div class="ph" style="max-width:120px;min-height:120px">Avatar</div>
+    <label>Nombre<input name="name" /></label>
+    <h3>Intereses</h3>
+    <div class="ph">Categorías seleccionables</div>
+    <div class="row"><button class="btn" type="submit">Guardar cambios</button><a class="btn out" href="/profile/friends">Ver amigos</a></div>
+  </form>
+</AppLayout>

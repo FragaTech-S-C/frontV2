@@ -1,0 +1,11 @@
+---
+import AuthLayout from '@/layouts/AuthLayout.astro';
+---
+<AuthLayout title="Iniciar sesión">
+  <form class="box" style="border:0;padding:0;background:none">
+    <label>Email<input type="email" name="email" /></label>
+    <label>Contraseña<input type="password" name="password" /></label>
+    <button class="btn" type="submit">Entrar</button>
+    <p>¿No tenés cuenta? <a href="/register">Registrate</a></p>
+  </form>
+</AuthLayout>

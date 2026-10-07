@@ -1,0 +1,14 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import EventCard from '@/components/EventCard.astro';
+---
+<AppLayout title="Buscar eventos">
+  <form class="row">
+    <input class="grow" type="search" aria-label="Buscar" placeholder="Metabuscador de eventos" />
+    <button class="btn" type="submit">Buscar</button>
+  </form>
+  <div class="row">
+    <button class="btn out">Categoría</button><button class="btn out">Fecha</button><button class="btn out">Cerca de mí</button>
+  </div>
+  <div class="grid"><EventCard /><EventCard id="2" /><EventCard id="3" /></div>
+</AppLayout>

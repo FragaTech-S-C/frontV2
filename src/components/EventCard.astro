@@ -1,0 +1,8 @@
+---
+const { id = '1', title = 'Nombre del evento', meta = 'Fecha · Lugar' } = Astro.props;
+---
+<a href={`/events/${id}`} class="box" style="text-decoration:none;color:inherit">
+  <div class="ph">Imagen</div>
+  <h3>{title}</h3>
+  <p>{meta}</p>
+</a>

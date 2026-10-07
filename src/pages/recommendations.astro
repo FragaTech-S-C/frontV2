@@ -1,0 +1,8 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import EventCard from '@/components/EventCard.astro';
+---
+<AppLayout title="Sugeridos para vos">
+  <p>Eventos según tus intereses.</p>
+  <div class="grid"><EventCard /><EventCard id="2" /><EventCard id="3" /></div>
+</AppLayout>

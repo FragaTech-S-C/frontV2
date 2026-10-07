@@ -1,0 +1,19 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import EventCard from '@/components/EventCard.astro';
+const columnas = ['Mis eventos', 'Institucionales', 'Recomendados'];
+---
+<AppLayout title="Dashboard">
+  <div class="row">
+    <input class="grow" type="search" aria-label="Buscar eventos" placeholder="Buscar eventos" />
+    <a class="btn" href="/events/new">Nuevo evento</a>
+  </div>
+  <div class="grid">
+    {columnas.map((c) => (
+      <section class="box">
+        <h3>{c}</h3>
+        <EventCard /><EventCard id="2" />
+      </section>
+    ))}
+  </div>
+</AppLayout>

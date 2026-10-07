@@ -1,0 +1,16 @@
+---
+const { cancelHref = '/dashboard' } = Astro.props;
+---
+<form class="box">
+  <label>Título<input name="title" /></label>
+  <label>Fecha y hora<input type="datetime-local" name="date" /></label>
+  <label>Lugar<input name="place" /></label>
+  <label>Categoría<select name="category"><option>Elegí una categoría</option></select></label>
+  <label>Tipo<select name="type"><option>Personal</option><option>Institucional (solo LEADER)</option></select></label>
+  <label>Descripción y notas<textarea name="notes" rows="4"></textarea></label>
+  <div class="ph">Adjuntar archivos</div>
+  <div class="row">
+    <button class="btn" type="submit">Guardar evento</button>
+    <a class="btn out" href={cancelHref}>Cancelar</a>
+  </div>
+</form>
