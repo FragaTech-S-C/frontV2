@@ -1,14 +1,103 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-import EventCard from '@/components/EventCard.astro';
 ---
 <AppLayout title="Buscar eventos">
-  <form class="row">
-    <input class="grow" type="search" aria-label="Buscar" placeholder="Metabuscador de eventos" />
+  <form id="search-form" class="row">
+    <input id="search-input" class="grow" type="search" aria-label="Buscar" placeholder="Metabuscador de eventos" />
     <button class="btn" type="submit">Buscar</button>
   </form>
   <div class="row">
-    <button class="btn out">Categoría</button><button class="btn out">Fecha</button><button class="btn out">Cerca de mí</button>
+    <button class="btn out" type="button">Categoría</button><button class="btn out" type="button">Fecha</button><button class="btn out" type="button">Cerca de mí</button>
   </div>
-  <div class="grid"><EventCard /><EventCard id="2" /><EventCard id="3" /></div>
+  <div id="search-status" class="box" style="margin-bottom:1rem;display:none"></div>
+  <div id="search-results" class="grid"></div>
+
+  <script is:inline>
+    const apiBase = import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL;
+    if (!apiBase) {
+      throw new Error('Missing PUBLIC_API_URL or BACKEND_URL environment variable.');
+    }
+    const token = localStorage.getItem('meetia-access-token');
+    const form = document.getElementById('search-form');
+    const input = document.getElementById('search-input');
+    const results = document.getElementById('search-results');
+    const status = document.getElementById('search-status');
+
+    const formatArgentinaDate = (value) => {
+      if (!value) return 'Sin fecha';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'Sin fecha';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    };
+
+    const formatLocation = (event) => {
+      const parts = [event.location, event.city, event.province, event.country].filter(Boolean);
+      return parts.length ? parts.join(' - ') : 'Sin ubicación';
+    };
+
+    const renderResults = (items) => {
+      if (!results) return;
+      results.innerHTML = '';
+
+      if (!items || items.length === 0) {
+        status.style.display = 'block';
+        status.textContent = 'No se encontraron resultados.';
+        return;
+      }
+
+      const mapped = items.map((entry) => entry.event || entry);
+
+      mapped.forEach((event) => {
+        const card = document.createElement('a');
+        card.href = `/events/${event.id}`;
+        card.className = 'box';
+        card.style.textDecoration = 'none';
+        card.style.color = 'inherit';
+        card.innerHTML = `
+          <div class="ph">${event.category || 'Evento'}</div>
+          <h3>${event.title || 'Evento sin título'}</h3>
+          <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
+        `;
+        results.appendChild(card);
+      });
+    };
+
+    const loadSearch = async (query) => {
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      status.style.display = 'block';
+      status.textContent = 'Buscando eventos...';
+
+      try {
+        const url = `${apiBase}/search?q=${encodeURIComponent(query || 'evento')}&limit=6`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => []);
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'La búsqueda falló.');
+        }
+
+        renderResults(Array.isArray(payload) ? payload : payload.events || []);
+        status.style.display = 'none';
+      } catch (error) {
+        status.style.display = 'block';
+        status.textContent = error.message || 'No se pudo completar la búsqueda.';
+      }
+    };
+
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      loadSearch(input.value.trim());
+    });
+
+    loadSearch('evento');
+  </script>
 </AppLayout>

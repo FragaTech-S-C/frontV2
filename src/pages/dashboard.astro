@@ -1,19 +1,112 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-import EventCard from '@/components/EventCard.astro';
 const columnas = ['Mis eventos', 'Institucionales', 'Recomendados'];
 ---
 <AppLayout title="Dashboard">
   <div class="row">
-    <input class="grow" type="search" aria-label="Buscar eventos" placeholder="Buscar eventos" />
+    <input id="dashboard-search" class="grow" type="search" aria-label="Buscar eventos" placeholder="Buscar eventos" />
+    <button id="dashboard-search-btn" class="btn" type="button">Buscar</button>
     <a class="btn" href="/events/new">Nuevo evento</a>
   </div>
-  <div class="grid">
-    {columnas.map((c) => (
-      <section class="box">
-        <h3>{c}</h3>
-        <EventCard /><EventCard id="2" />
-      </section>
-    ))}
-  </div>
+
+  <div id="dashboard-status" class="box" style="margin-bottom:1rem;display:none"></div>
+  <div class="grid" id="dashboard-grid"></div>
+
+  <script is:inline>
+    const apiBase = import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL;
+    if (!apiBase) {
+      throw new Error('Missing PUBLIC_API_URL or BACKEND_URL environment variable.');
+    }
+    const token = localStorage.getItem('meetia-access-token');
+    const grid = document.getElementById('dashboard-grid');
+    const status = document.getElementById('dashboard-status');
+    const searchInput = document.getElementById('dashboard-search');
+    const searchButton = document.getElementById('dashboard-search-btn');
+
+    const formatArgentinaDate = (value) => {
+      if (!value) return 'Sin fecha';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'Sin fecha';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    };
+
+    const formatLocation = (event) => {
+      const parts = [event.location, event.city, event.province, event.country].filter(Boolean);
+      return parts.length ? parts.join(' - ') : 'Sin ubicación';
+    };
+
+    const renderEvents = (events) => {
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      if (!events || events.length === 0) {
+        status.style.display = 'block';
+        status.textContent = 'No hay eventos para mostrar.';
+        return;
+      }
+
+      events.forEach((event) => {
+        const card = document.createElement('a');
+        card.href = `/events/${event.id}`;
+        card.className = 'box';
+        card.style.textDecoration = 'none';
+        card.style.color = 'inherit';
+        card.innerHTML = `
+          <div class="ph">${event.category || 'Evento'}</div>
+          <h3>${event.title || 'Evento sin título'}</h3>
+          <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
+        `;
+        grid.appendChild(card);
+      });
+    };
+
+    const loadEvents = async (query = '') => {
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      status.style.display = 'block';
+      status.textContent = 'Cargando eventos...';
+
+      try {
+        const url = query
+          ? `${apiBase}/search?q=${encodeURIComponent(query)}&limit=6`
+          : `${apiBase}/events?limit=6`;
+
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const payload = await response.json().catch(() => []);
+        if (!response.ok) {
+          throw new Error(payload.message || 'No se pudieron cargar los eventos.');
+        }
+
+        const events = Array.isArray(payload) ? payload : payload.events || [];
+        renderEvents(events);
+        status.style.display = 'none';
+      } catch (error) {
+        status.style.display = 'block';
+        status.textContent = error.message || 'No se pudieron cargar los eventos.';
+      }
+    };
+
+    if (searchButton && searchInput) {
+      searchButton.addEventListener('click', () => {
+        loadEvents(searchInput.value.trim());
+      });
+
+      searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          loadEvents(searchInput.value.trim());
+        }
+      });
+    }
+
+    loadEvents();
+  </script>
 </AppLayout>

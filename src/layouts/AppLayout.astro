@@ -14,10 +14,28 @@ const links = [
       {links.map(([href, label]) => (
         <a href={href} aria-current={path.startsWith(href) ? 'page' : undefined}>{label}</a>
       ))}
+      <button id="logout-button" type="button" class="btn out">Cerrar sesión</button>
     </nav>
     <main class="main">
       <h1>{title}</h1>
       <slot />
     </main>
   </div>
+
+  <script>
+    import { api, clearStoredAuth } from '@/lib/api';
+
+    const logoutButton = document.getElementById('logout-button');
+
+    logoutButton?.addEventListener('click', async () => {
+      try {
+        await api.logout();
+      } catch (error) {
+        console.warn('Logout request failed:', error);
+      } finally {
+        clearStoredAuth();
+        window.location.href = '/login';
+      }
+    });
+  </script>
 </Base>

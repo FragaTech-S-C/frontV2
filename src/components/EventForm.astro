@@ -1,16 +1,193 @@
 ---
 const { cancelHref = '/dashboard' } = Astro.props;
 ---
-<form class="box">
-  <label>Título<input name="title" /></label>
-  <label>Fecha y hora<input type="datetime-local" name="date" /></label>
-  <label>Lugar<input name="place" /></label>
-  <label>Categoría<select name="category"><option>Elegí una categoría</option></select></label>
-  <label>Tipo<select name="type"><option>Personal</option><option>Institucional (solo LEADER)</option></select></label>
-  <label>Descripción y notas<textarea name="notes" rows="4"></textarea></label>
-  <div class="ph">Adjuntar archivos</div>
+<form id="event-form" class="box">
+  <label>Título<input name="title" required /></label>
+  <label>Descripción<textarea name="description" rows="4"></textarea></label>
+  <div class="row">
+    <label class="grow">Inicio<input type="datetime-local" name="startDate" required /></label>
+    <label class="grow">Fin<input type="datetime-local" name="endDate" required /></label>
+  </div>
+  <div class="row">
+    <label class="grow">Categoría
+      <select name="category">
+        <option value="CONFERENCE">Conferencia</option>
+        <option value="WORKSHOP">Taller</option>
+        <option value="MEETING">Reunión</option>
+        <option value="SOCIAL">Social</option>
+        <option value="SPORTS">Deportivo</option>
+        <option value="CULTURAL">Cultural</option>
+        <option value="EDUCATIONAL">Educativo</option>
+        <option value="NETWORKING">Networking</option>
+        <option value="OTHER">Otros</option>
+      </select>
+    </label>
+    <label class="grow">Visibilidad
+      <select name="visibility">
+        <option value="PUBLIC">Público</option>
+        <option value="INSTITUTION">Institución</option>
+        <option value="GROUP">Grupo</option>
+        <option value="PRIVATE">Privado</option>
+      </select>
+    </label>
+  </div>
+  <label>Lugar<input name="location" placeholder="Roque Sáenz Peña" /></label>
+  <div class="row">
+    <label class="grow">Ciudad / Localidad<input name="city" placeholder="José C Paz" /></label>
+    <label class="grow">Provincia
+      <select name="province">
+        <option value="">Seleccioná una provincia</option>
+        <option value="CABA">CABA</option>
+        <option value="Buenos Aires">Buenos Aires</option>
+        <option value="Catamarca">Catamarca</option>
+        <option value="Chaco">Chaco</option>
+        <option value="Chubut">Chubut</option>
+        <option value="Córdoba">Córdoba</option>
+        <option value="Corrientes">Corrientes</option>
+        <option value="Entre Ríos">Entre Ríos</option>
+        <option value="Formosa">Formosa</option>
+        <option value="Jujuy">Jujuy</option>
+        <option value="La Pampa">La Pampa</option>
+        <option value="La Rioja">La Rioja</option>
+        <option value="Mendoza">Mendoza</option>
+        <option value="Misiones">Misiones</option>
+        <option value="Neuquén">Neuquén</option>
+        <option value="Río Negro">Río Negro</option>
+        <option value="Salta">Salta</option>
+        <option value="San Juan">San Juan</option>
+        <option value="San Luis">San Luis</option>
+        <option value="Santa Cruz">Santa Cruz</option>
+        <option value="Santa Fe">Santa Fe</option>
+        <option value="Santiago del Estero">Santiago del Estero</option>
+        <option value="Tierra del Fuego">Tierra del Fuego</option>
+        <option value="Tucumán">Tucumán</option>
+      </select>
+    </label>
+  </div>
+  <div class="row">
+    <label class="grow">Etiquetas<input name="tags" placeholder="tech,networking" /></label>
+    <label class="grow">Máx. asistentes<input type="number" name="maxAttendees" min="0" value="0" /></label>
+  </div>
+  <div class="row">
+    <label class="grow">¿Es gratis?<select name="isFree"><option value="true">Sí</option><option value="false">No</option></select></label>
+    <label id="price-field-wrapper" class="grow">Precio<input type="number" name="price" min="0" step="0.01" placeholder="0.00" /></label>
+  </div>
+  <label>Página web<input type="url" name="website" /></label>
+  <label>URL de inscripción<input type="url" name="registrationUrl" /></label>
+  <div class="ph" id="event-status" style="display:none"></div>
   <div class="row">
     <button class="btn" type="submit">Guardar evento</button>
     <a class="btn out" href={cancelHref}>Cancelar</a>
   </div>
 </form>
+
+<script>
+  import { api } from '@/lib/api';
+
+  const form = document.getElementById('event-form');
+  const statusBox = document.getElementById('event-status');
+  const priceFieldWrapper = document.getElementById('price-field-wrapper');
+  const isFreeField = form?.querySelector('select[name="isFree"]');
+  const startDateField = form?.querySelector('input[name="startDate"]');
+  const endDateField = form?.querySelector('input[name="endDate"]');
+
+  const minDateValue = new Date();
+  minDateValue.setSeconds(0, 0);
+  const minDateTime = minDateValue.toISOString().slice(0, 16);
+
+  if (startDateField) startDateField.min = minDateTime;
+  if (endDateField) endDateField.min = minDateTime;
+
+  const updatePriceVisibility = () => {
+    if (!priceFieldWrapper || !isFreeField) return;
+
+    const isFree = String(isFreeField.value ?? 'true') === 'true';
+    const priceInput = priceFieldWrapper.querySelector('input[name="price"]');
+
+    priceFieldWrapper.style.display = isFree ? 'none' : 'block';
+
+    if (priceInput) {
+      priceInput.disabled = isFree;
+      priceInput.required = !isFree;
+    }
+  };
+
+  isFreeField?.addEventListener('change', updatePriceVisibility);
+  updatePriceVisibility();
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const startDateRaw = formData.get('startDate');
+    const endDateRaw = formData.get('endDate');
+    const startDate = startDateRaw ? new Date(String(startDateRaw)) : null;
+    const endDate = endDateRaw ? new Date(String(endDateRaw)) : null;
+    const isFree = String(formData.get('isFree') ?? 'true') === 'true';
+    const location = String(formData.get('location') ?? '').trim();
+    const city = String(formData.get('city') ?? '').trim();
+    const province = String(formData.get('province') ?? '').trim();
+    const provinceLabel = province === 'CABA' ? 'CABA' : province ? `Prov. ${province}` : '';
+    const formattedLocation = [location, city, provinceLabel].filter(Boolean).join(' - ');
+
+    if (startDate && startDate < new Date()) {
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = 'La fecha del evento no puede ser anterior a hoy.';
+      }
+      return;
+    }
+
+    if (endDate && startDate && endDate < startDate) {
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = 'La fecha de fin debe ser igual o posterior a la de inicio.';
+      }
+      return;
+    }
+
+    const payload = {
+      title: String(formData.get('title') ?? '').trim(),
+      description: String(formData.get('description') ?? '').trim() || undefined,
+      category: formData.get('category') || 'OTHER',
+      visibility: formData.get('visibility') || 'PUBLIC',
+      startDate: startDate ? startDate.toISOString() : undefined,
+      endDate: endDate ? endDate.toISOString() : undefined,
+      location: formattedLocation || undefined,
+      city: city || undefined,
+      province: province || undefined,
+      country: 'Argentina',
+      tags: String(formData.get('tags') ?? '')
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      maxAttendees: Number(formData.get('maxAttendees') ?? 0),
+      isFree,
+      price: isFree ? undefined : formData.get('price') ? Number(formData.get('price')) : undefined,
+      website: String(formData.get('website') ?? '').trim() || undefined,
+      registrationUrl: String(formData.get('registrationUrl') ?? '').trim() || undefined,
+      status: 'PUBLISHED',
+    };
+
+    if (!payload.title || !payload.startDate || !payload.endDate) {
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = 'Completá título e inicio/fin del evento.';
+      }
+      return;
+    }
+
+    if (statusBox) {
+      statusBox.style.display = 'block';
+      statusBox.textContent = 'Guardando evento...';
+    }
+
+    try {
+      await api.createEvent(payload);
+      window.location.href = '/dashboard';
+    } catch (error) {
+      if (statusBox) {
+        statusBox.textContent = error instanceof Error ? error.message : 'No se pudo guardar el evento.';
+      }
+    }
+  });
+</script>

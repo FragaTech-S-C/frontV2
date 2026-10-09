@@ -1,12 +1,90 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
 ---
+
 <AppLayout title="Mi perfil">
-  <form class="box">
-    <div class="ph" style="max-width:120px;min-height:120px">Avatar</div>
-    <label>Nombre<input name="name" /></label>
+  <form id="profile-form" class="box">
+    <div class="ph" id="profile-avatar" style="max-width:120px;min-height:120px">Avatar</div>
+
+    <label>Nombre<input id="firstName" name="firstName" /></label>
+    <label>Apellido<input id="lastName" name="lastName" /></label>
+    <label>Email<input id="email" name="email" type="email" readonly /></label>
+    <label>Teléfono<input id="phone" name="phone" type="tel" placeholder="Opcional" /></label>
+    <label>Avatar URL<input id="avatar" name="avatar" type="url" placeholder="https://..." /></label>
+
     <h3>Intereses</h3>
     <div class="ph">Categorías seleccionables</div>
-    <div class="row"><button class="btn" type="submit">Guardar cambios</button><a class="btn out" href="/profile/friends">Ver amigos</a></div>
+
+    <div class="row">
+      <button class="btn" type="submit">Guardar cambios</button>
+      <a class="btn out" href="/profile/friends">Ver amigos</a>
+    </div>
+    <p id="profile-status" aria-live="polite"></p>
   </form>
+
+  <script>
+    import { api, setStoredAuth } from '@/lib/api';
+
+    const profileForm = document.getElementById('profile-form');
+    const statusEl = document.getElementById('profile-status');
+    const firstName = document.getElementById('firstName');
+    const lastName = document.getElementById('lastName');
+    const email = document.getElementById('email');
+    const phone = document.getElementById('phone');
+    const avatar = document.getElementById('avatar');
+    const avatarPreview = document.getElementById('profile-avatar');
+
+    const fillProfile = (user) => {
+      if (!user) return;
+      firstName.value = user.firstName ?? '';
+      lastName.value = user.lastName ?? '';
+      email.value = user.email ?? '';
+      phone.value = user.phone ?? '';
+      avatar.value = user.avatar ?? '';
+      if (user.avatar) {
+        avatarPreview.textContent = '';
+        avatarPreview.style.backgroundImage = `url(${user.avatar})`;
+        avatarPreview.style.backgroundSize = 'cover';
+        avatarPreview.style.backgroundPosition = 'center';
+      } else {
+        avatarPreview.textContent = user.firstName?.[0] || user.email?.[0] || 'U';
+        avatarPreview.style.backgroundImage = 'none';
+      }
+    };
+
+    const loadProfile = async () => {
+      try {
+        const user = await api.me();
+        fillProfile(user);
+      } catch (error) {
+        statusEl.textContent = error instanceof Error ? error.message : 'No se pudo cargar el perfil.';
+      }
+    };
+
+    profileForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      statusEl.textContent = 'Guardando cambios...';
+
+      try {
+        const payload = {
+          firstName: firstName.value.trim(),
+          lastName: lastName.value.trim(),
+          phone: phone.value.trim(),
+          avatar: avatar.value.trim(),
+        };
+
+        const updatedUser = await api.updateProfile(payload);
+        fillProfile(updatedUser);
+
+        const storedAuth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
+        setStoredAuth({ ...storedAuth, user: { ...(storedAuth.user || {}), ...updatedUser } });
+
+        statusEl.textContent = 'Perfil actualizado correctamente.';
+      } catch (error) {
+        statusEl.textContent = error instanceof Error ? error.message : 'No se pudo guardar el perfil.';
+      }
+    });
+
+    loadProfile();
+  </script>
 </AppLayout>

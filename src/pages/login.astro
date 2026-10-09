@@ -2,10 +2,37 @@
 import AuthLayout from '@/layouts/AuthLayout.astro';
 ---
 <AuthLayout title="Iniciar sesión">
-  <form class="box" style="border:0;padding:0;background:none">
-    <label>Email<input type="email" name="email" /></label>
-    <label>Contraseña<input type="password" name="password" /></label>
+  <form id="login-form" class="box" style="border:0;padding:0;background:none">
+    <label>Email<input type="email" name="email" required /></label>
+    <label>Contraseña<input type="password" name="password" required /></label>
     <button class="btn" type="submit">Entrar</button>
+    <p id="login-status" aria-live="polite"></p>
     <p>¿No tenés cuenta? <a href="/register">Registrate</a></p>
   </form>
+
+  <script>
+    import { api, setStoredAuth } from '@/lib/api';
+
+    const loginForm = document.getElementById('login-form');
+    const loginStatus = document.getElementById('login-status');
+
+    loginForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(loginForm as HTMLFormElement);
+      const payload = {
+        email: String(formData.get('email') ?? '').trim(),
+        password: String(formData.get('password') ?? '').trim(),
+      };
+
+      if(loginStatus) loginStatus.textContent = 'Iniciando sesión...';
+
+      try {
+        const data = await api.login(payload);
+        setStoredAuth(data);
+        window.location.href = '/dashboard';
+      } catch (error) {
+        if(loginStatus) loginStatus.textContent = error instanceof Error ? error.message : 'No se pudo iniciar sesión.';
+      }
+    });
+  </script>
 </AuthLayout>

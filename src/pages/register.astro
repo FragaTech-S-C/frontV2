@@ -2,11 +2,42 @@
 import AuthLayout from '@/layouts/AuthLayout.astro';
 ---
 <AuthLayout title="Crear cuenta">
-  <form class="box" style="border:0;padding:0;background:none">
-    <label>Nombre<input name="name" /></label>
-    <label>Email<input type="email" name="email" /></label>
-    <label>Contraseña<input type="password" name="password" /></label>
+  <form id="register-form" class="box" style="border:0;padding:0;background:none">
+    <label>Nombre<input name="firstName" /></label>
+    <label>Apellido<input name="lastName" /></label>
+    <label>Email<input type="email" name="email" required /></label>
+    <label>Contraseña<input type="password" name="password" required /></label>
     <button class="btn" type="submit">Registrarme</button>
+    <p id="register-status" aria-live="polite"></p>
     <p>¿Ya tenés cuenta? <a href="/login">Iniciá sesión</a></p>
   </form>
+
+  <script>
+    import { api, setStoredAuth } from '@/lib/api';
+
+    const registerForm = document.getElementById('register-form');
+    const registerStatus = document.getElementById('register-status');
+
+    registerForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(registerForm as HTMLFormElement);
+      const payload = {
+        firstName: String(formData.get('firstName') ?? '').trim(),
+        lastName: String(formData.get('lastName') ?? '').trim(),
+        email: String(formData.get('email') ?? '').trim(),
+        password: String(formData.get('password') ?? '').trim(),
+      };
+      
+      try {
+        if(!registerStatus) throw new Error("Missing register")
+        registerStatus.textContent = 'Creando cuenta...';
+        const data = await api.register(payload);
+        setStoredAuth(data);
+        window.location.href = '/dashboard';
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'No se pudo registrar al usuario.');
+        // registerStatus.textContent = ;
+      }
+    });
+  </script>
 </AuthLayout>
