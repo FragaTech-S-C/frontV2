@@ -6,6 +6,8 @@ export function getStaticPaths() { return [{ params: { id: '1' } }]; }
 const { id } = Astro.params;
 ---
 <AppLayout title="Nombre del evento">
+  
+  <!--
   <p>Fecha · Lugar · Categoría · Organizador</p>
   <div class="grid">
     <section class="box">
@@ -37,4 +39,5 @@ const { id } = Astro.params;
     
     
   </script>
+   -->
 </AppLayout>
