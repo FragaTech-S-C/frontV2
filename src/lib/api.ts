@@ -195,6 +195,89 @@ export const api = {
     return data;
   },
 
+  attendEvent: async (eventId: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/events/${eventId}/attend`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo confirmar tu asistencia.');
+    }
+    return data;
+  },
+
+  confirmAssistance: async (eventId: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/events/${eventId}/confirm-assistance`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo confirmar la asistencia.');
+    }
+    return data;
+  },
+
+  leaveEvent: async (eventId: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/events/${eventId}/leave`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo abandonar el evento.');
+    }
+    return data;
+  },
+
+  inviteToEvent: async (eventId: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const inviteUrl = `${window.location.origin}/events/${eventId}`;
+
+    try {
+      const response = await fetch(`${baseUrl}/events/${eventId}/invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (response.status === 404 || response.status === 405) {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(inviteUrl);
+        } else {
+          window.prompt('Copia este enlace del evento:', inviteUrl);
+        }
+
+        return { message: 'Enlace del evento copiado al portapapeles.', url: inviteUrl };
+      }
+
+      const data = await jsonOrText(response);
+      if (!response.ok) {
+        throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo enviar la invitación.');
+      }
+
+      return data;
+    } catch (error) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(inviteUrl);
+        return { message: 'Enlace del evento copiado al portapapeles.', url: inviteUrl };
+      }
+
+      window.prompt('Copia este enlace del evento:', inviteUrl);
+      return { message: 'Enlace del evento listo para compartir.', url: inviteUrl };
+    }
+  },
+
   getEvents: async (params: Record<string, string | number | undefined> = {}) => {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
