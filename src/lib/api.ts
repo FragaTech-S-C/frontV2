@@ -41,12 +41,15 @@ export function setStoredAuth(auth: AuthPayload | null) {
 
   localStorage.setItem('meetia-auth', JSON.stringify(auth));
 
-  if (auth.accessToken) {
-    localStorage.setItem('meetia-access-token', auth.accessToken);
+  const accessToken = auth.accessToken ?? auth.access_token ?? auth.token ?? auth.jwt;
+  const refreshToken = auth.refreshToken ?? auth.refresh_token ?? auth.refresh;
+
+  if (accessToken) {
+    localStorage.setItem('meetia-access-token', String(accessToken));
   }
 
-  if (auth.refreshToken) {
-    localStorage.setItem('meetia-refresh-token', auth.refreshToken);
+  if (refreshToken) {
+    localStorage.setItem('meetia-refresh-token', String(refreshToken));
   }
 }
 
@@ -61,71 +64,136 @@ export function clearStoredAuth() {
 export function getAccessToken() {
   if (typeof window === 'undefined') return null;
 
-  return getStoredAuth()?.accessToken ?? localStorage.getItem('meetia-access-token');
+  const storedAuth = getStoredAuth();
+  const tokenFromStorage = storedAuth
+    ? (storedAuth.accessToken ?? storedAuth.access_token ?? storedAuth.token ?? storedAuth.jwt ?? null)
+    : null;
+
+  return tokenFromStorage ?? localStorage.getItem('meetia-access-token') ?? localStorage.getItem('accessToken') ?? localStorage.getItem('access_token') ?? null;
 }
 
-export async function apiFetch(path: string, options: RequestInit = {}) {
-  const url = `${getApiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
-  const headers = new Headers(options.headers ?? {});
+export function getRefreshToken() {
+  if (typeof window === 'undefined') return null;
 
-  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
+  const storedAuth = getStoredAuth();
+  const tokenFromStorage = storedAuth
+    ? (storedAuth.refreshToken ?? storedAuth.refresh_token ?? storedAuth.refresh ?? null)
+    : null;
 
-  const token = getAccessToken();
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
+  return tokenFromStorage ?? localStorage.getItem('meetia-refresh-token') ?? localStorage.getItem('refreshToken') ?? localStorage.getItem('refresh_token') ?? null;
+}
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
+async function jsonOrText(response: Response) {
   const contentType = response.headers.get('content-type') ?? '';
-  const payload = contentType.includes('application/json') ? await response.json() : await response.text();
-
-  if (!response.ok) {
-    const message = typeof payload === 'string' ? payload : payload?.message || payload?.error || 'Request failed';
-    throw new Error(message);
-  }
-
-  return payload;
+  return contentType.includes('application/json') ? response.json() : response.text();
 }
 
 export const api = {
-  login: async (credentials: { email: string; password: string; twoFactorCode?: string }) =>
-    apiFetch('/auth/login', {
+  login: async (credentials: { email: string; password: string; twoFactorCode?: string }) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/login`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials),
-    }),
+    });
+    const payload = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof payload === 'string' ? payload : payload?.message || payload?.error || 'No se pudo iniciar sesión.');
+    }
+    setStoredAuth(payload);
+    return payload;
+  },
 
-  register: async (payload: Record<string, unknown>) =>
-    apiFetch('/auth/register', {
+  register: async (payload: Record<string, unknown>) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/register`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }),
+    });
 
-  authMe: async () => apiFetch('/auth/me'),
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo registrar al usuario.');
+    }
 
-  me: async () => apiFetch('/users/me'),
+    setStoredAuth(data);
+    return data;
+  },
 
-  updateProfile: async (payload: Record<string, unknown>) =>
-    apiFetch('/users/me', {
+  authMe: async () => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/auth/me`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo cargar tu sesión.');
+    }
+    return data;
+  },
+
+  me: async () => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/users/me`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo cargar el usuario.');
+    }
+    return data;
+  },
+
+  updateProfile: async (payload: Record<string, unknown>) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/users/me`, {
       method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
-    }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo actualizar el perfil.');
+    }
+    return data;
+  },
 
-  refresh: async (refreshToken: string) =>
-    apiFetch('/auth/refresh', {
+  refresh: async (refreshToken: string) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/refresh`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
-    }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo refrescar la sesión.');
+    }
+    setStoredAuth(data);
+    return data;
+  },
 
-  logout: async () =>
-    apiFetch('/auth/logout', {
+  logout: async () => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/auth/logout`, {
       method: 'POST',
-    }),
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo cerrar sesión.');
+    }
+    clearStoredAuth();
+    return data;
+  },
 
   getEvents: async (params: Record<string, string | number | undefined> = {}) => {
     const search = new URLSearchParams();
@@ -136,12 +204,33 @@ export const api = {
     });
 
     const query = search.toString();
-    return apiFetch(`/events${query ? `?${query}` : ''}`);
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/events${query ? `?${query}` : ''}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar los eventos.');
+    }
+    return data;
   },
 
-  createEvent: async (payload: Record<string, unknown>) =>
-    apiFetch('/events', {
+  createEvent: async (payload: Record<string, unknown>) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/events/create`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
-    }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo crear el evento.');
+    }
+    return data;
+  },
 };

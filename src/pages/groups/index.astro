@@ -2,9 +2,56 @@
 import AppLayout from '@/layouts/AppLayout.astro';
 ---
 <AppLayout title="Mis grupos">
-  <div class="row"><a class="btn" href="/groups/new">Nuevo grupo</a></div>
-  <div class="grid">
-    <a class="box" href="/groups/1" style="text-decoration:none;color:inherit"><h3>Grupo personal</h3><p>Miembros · Eventos</p></a>
-    <a class="box" href="/groups/2" style="text-decoration:none;color:inherit"><h3>Institución</h3><p>Miembros · Eventos</p></a>
+  <div class="row">
+    <a class="btn" href="/groups/new">Nuevo grupo</a>
+    <a class="btn out" href="/dashboard">Volver</a>
   </div>
+  <div id="groups-list" class="grid"></div>
+
+  <script>
+    (() => {
+      const list = document.getElementById('groups-list');
+      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
+      const slugify = (value = '') => String(value)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'grupo';
+
+      if (!list) return;
+
+      if (!groups.length) {
+        list.innerHTML = `
+          <div class="box">
+            <h3>Sin grupos todavía</h3>
+            <p>Crea tu primer espacio personal o institucional para comenzar.</p>
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = groups
+        .map((group: any) => {
+          const isInstitutional = group.type === 'institutional';
+          const label = isInstitutional ? 'Institucional' : 'Personal';
+          const slug = group.slug || slugify(group.name || 'grupo');
+          const avatarMarkup = group.avatar
+            ? `<img src="${group.avatar}" alt="${group.name}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;" />`
+            : `<div style="display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:#e6e7ff;color:#293a70;font-weight:700;">${group.name?.charAt(0) ?? 'G'}</div>`;
+
+          return `
+            <a class="box" href="/groups/${slug}" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;">
+              ${avatarMarkup}
+              <div>
+                <h3 style="margin:0 0 4px;">${group.name}</h3>
+                <p style="margin:0;">${label} · Líder: ${group.leader || 'Yo'}</p>
+                <small>${group.institutionId ? 'Institución asociada' : 'Grupo personal'}</small>
+              </div>
+            </a>
+          `;
+        })
+        .join('');
+    })();
+  </script>
 </AppLayout>

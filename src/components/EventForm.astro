@@ -1,79 +1,142 @@
 ---
 const { cancelHref = '/dashboard' } = Astro.props;
+
+type EventCategory =
+  | 'CONFERENCE'
+  | 'WORKSHOP'
+  | 'MEETING'
+  | 'SOCIAL'
+  | 'SPORTS'
+  | 'CULTURAL'
+  | 'EDUCATIONAL'
+  | 'NETWORKING'
+  | 'OTHER';
+
+type EventVisibility = 'PUBLIC' | 'INSTITUTION' | 'GROUP' | 'PRIVATE';
+
+type form = {
+  category: EventCategory;
+  visibility: EventVisibility;
+  ubication: string;
+  province: string;
+  inst?: number;
+  maxAttendees?: number;
+  tags?: Array<string>;
+  isFree?: boolean;
+  website?: string;
+  registrationUrl?: string;
+  coverImage?: string;
+};
+
+const categoryOptions = [
+  { value: 'CONFERENCE', label: 'Conferencia' },
+  { value: 'WORKSHOP', label: 'Taller' },
+  { value: 'MEETING', label: 'Reunión' },
+  { value: 'SOCIAL', label: 'Social' },
+  { value: 'SPORTS', label: 'Deportivo' },
+  { value: 'CULTURAL', label: 'Cultural' },
+  { value: 'EDUCATIONAL', label: 'Educativo' },
+  { value: 'NETWORKING', label: 'Networking' },
+  { value: 'OTHER', label: 'Otros' },
+] as const;
+
+const visibilityOptions = [
+  { value: 'PUBLIC', label: 'Público' },
+  { value: 'INSTITUTION', label: 'Institución' },
+  { value: 'GROUP', label: 'Grupo' },
+  { value: 'PRIVATE', label: 'Privado' },
+] as const;
+
+const provinceOptions = [
+  'CABA',
+  'Buenos Aires',
+  'Catamarca',
+  'Chaco',
+  'Chubut',
+  'Córdoba',
+  'Corrientes',
+  'Entre Ríos',
+  'Formosa',
+  'Jujuy',
+  'La Pampa',
+  'La Rioja',
+  'Mendoza',
+  'Misiones',
+  'Neuquén',
+  'Río Negro',
+  'Salta',
+  'San Juan',
+  'San Luis',
+  'Santa Cruz',
+  'Santa Fe',
+  'Santiago del Estero',
+  'Tierra del Fuego',
+  'Tucumán',
+] as const;
+// console.log(localStorage.getItem())
 ---
 <form id="event-form" class="box">
   <label>Título<input name="title" required /></label>
   <label>Descripción<textarea name="description" rows="4"></textarea></label>
   <div class="row">
     <label class="grow">Inicio<input type="datetime-local" name="startDate" required /></label>
-    <label class="grow">Fin<input type="datetime-local" name="endDate" required /></label>
+    <label class="grow">Fin<input type="datetime-local" name="endDate" /></label>
   </div>
+
   <div class="row">
     <label class="grow">Categoría
       <select name="category">
-        <option value="CONFERENCE">Conferencia</option>
-        <option value="WORKSHOP">Taller</option>
-        <option value="MEETING">Reunión</option>
-        <option value="SOCIAL">Social</option>
-        <option value="SPORTS">Deportivo</option>
-        <option value="CULTURAL">Cultural</option>
-        <option value="EDUCATIONAL">Educativo</option>
-        <option value="NETWORKING">Networking</option>
-        <option value="OTHER">Otros</option>
+        {categoryOptions.map(({ value, label }) => (
+          <option value={value}>{label}</option>
+        ))}
       </select>
     </label>
     <label class="grow">Visibilidad
       <select name="visibility">
-        <option value="PUBLIC">Público</option>
-        <option value="INSTITUTION">Institución</option>
-        <option value="GROUP">Grupo</option>
-        <option value="PRIVATE">Privado</option>
+        {visibilityOptions.map(({ value, label }) => (
+          <option value={value}>{label}</option>
+        ))}
       </select>
     </label>
   </div>
-  <label>Lugar<input name="location" placeholder="Roque Sáenz Peña" /></label>
+
   <div class="row">
-    <label class="grow">Ciudad / Localidad<input name="city" placeholder="José C Paz" /></label>
+    <label class="grow">HQ<input name="location" placeholder="Roque Sáenz Peña" /></label>
     <label class="grow">Provincia
       <select name="province">
         <option value="">Seleccioná una provincia</option>
-        <option value="CABA">CABA</option>
-        <option value="Buenos Aires">Buenos Aires</option>
-        <option value="Catamarca">Catamarca</option>
-        <option value="Chaco">Chaco</option>
-        <option value="Chubut">Chubut</option>
-        <option value="Córdoba">Córdoba</option>
-        <option value="Corrientes">Corrientes</option>
-        <option value="Entre Ríos">Entre Ríos</option>
-        <option value="Formosa">Formosa</option>
-        <option value="Jujuy">Jujuy</option>
-        <option value="La Pampa">La Pampa</option>
-        <option value="La Rioja">La Rioja</option>
-        <option value="Mendoza">Mendoza</option>
-        <option value="Misiones">Misiones</option>
-        <option value="Neuquén">Neuquén</option>
-        <option value="Río Negro">Río Negro</option>
-        <option value="Salta">Salta</option>
-        <option value="San Juan">San Juan</option>
-        <option value="San Luis">San Luis</option>
-        <option value="Santa Cruz">Santa Cruz</option>
-        <option value="Santa Fe">Santa Fe</option>
-        <option value="Santiago del Estero">Santiago del Estero</option>
-        <option value="Tierra del Fuego">Tierra del Fuego</option>
-        <option value="Tucumán">Tucumán</option>
+        {provinceOptions.map((province) => (
+          <option value={province}>{province}</option>
+        ))}
       </select>
     </label>
   </div>
-  <div class="row">
-    <label class="grow">Etiquetas<input name="tags" placeholder="tech,networking" /></label>
-    <label class="grow">Máx. asistentes<input type="number" name="maxAttendees" min="0" value="0" /></label>
+
+  <div id="institutional-event-fields" style="display:none;">
+    <div class="row">
+      <label class="grow">Institución asociada
+        <select name="institutionId">
+          <option value="">Seleccioná una institución</option>
+          <option value="inst-1">Universidad del Este</option>
+          <option value="inst-2">Fundación Innovar</option>
+          <option value="inst-3">Museo de Arte</option>
+        </select>
+      </label>
+      <label class="grow">Máx. asistentes<input type="number" name="maxAttendees" min="0" value="0" /></label>
+    </div>
+
+    <div class="row">
+      <label class="grow">Etiquetas<input name="tags" placeholder="tech,networking" /></label>
+      <label class="grow">¿Es gratis?<select name="isFree"><option value="true">Sí</option><option value="false">No</option></select></label>
+    </div>
+
+    <label id="price-field-wrapper" class="grow" style="display:none;">Precio<input type="number" name="price" min="0" step="0.01" placeholder="0.00" /></label>
+    <label>Página web<input type="url" name="website" /></label>
+    <label>URL de inscripción<input type="url" name="registrationUrl" /></label>
   </div>
-  <div class="row">
-    <label class="grow">¿Es gratis?<select name="isFree"><option value="true">Sí</option><option value="false">No</option></select></label>
-    <label id="price-field-wrapper" class="grow">Precio<input type="number" name="price" min="0" step="0.01" placeholder="0.00" /></label>
-  </div>
-  <label>Página web<input type="url" name="website" /></label>
-  <label>URL de inscripción<input type="url" name="registrationUrl" /></label>
+
+  <label>Imagen del evento<input type="url" name="coverImage" placeholder="https://example.com/cover.jpg" /></label>
+
   <div class="ph" id="event-status" style="display:none"></div>
   <div class="row">
     <button class="btn" type="submit">Guardar evento</button>
@@ -82,27 +145,37 @@ const { cancelHref = '/dashboard' } = Astro.props;
 </form>
 
 <script>
-  import { api } from '@/lib/api';
+  import { api, getAccessToken } from '@/lib/api';
 
-  const form = document.getElementById('event-form');
+  const form = document.getElementById('event-form') as HTMLFormElement | null;
   const statusBox = document.getElementById('event-status');
+  const visibilityField = form?.querySelector('select[name="visibility"]') as HTMLSelectElement | null;
+
+  const institutionalFields = document.getElementById('institutional-event-fields');
   const priceFieldWrapper = document.getElementById('price-field-wrapper');
-  const isFreeField = form?.querySelector('select[name="isFree"]');
-  const startDateField = form?.querySelector('input[name="startDate"]');
-  const endDateField = form?.querySelector('input[name="endDate"]');
+  const isFreeField = form?.querySelector('select[name="isFree"]') as HTMLSelectElement | null;
+  const startDateField = form?.querySelector('input[name="startDate"]') as HTMLInputElement | null;
+  const endDateField = form?.querySelector('input[name="endDate"]') as HTMLInputElement | null;
 
   const minDateValue = new Date();
   minDateValue.setSeconds(0, 0);
   const minDateTime = minDateValue.toISOString().slice(0, 16);
 
-  if (startDateField) startDateField.min = minDateTime;
-  if (endDateField) endDateField.min = minDateTime;
+  if (startDateField) (startDateField as HTMLInputElement).min = minDateTime;
+  if (endDateField) (endDateField as HTMLInputElement).min = minDateTime;
+
+  const updateInstitutionalVisibility = () => {
+    const isInstitutional = String(visibilityField?.value ?? 'PUBLIC') === 'INSTITUTION';
+    if (institutionalFields) {
+      institutionalFields.style.display = isInstitutional ? 'block' : 'none';
+    }
+  };
 
   const updatePriceVisibility = () => {
     if (!priceFieldWrapper || !isFreeField) return;
 
     const isFree = String(isFreeField.value ?? 'true') === 'true';
-    const priceInput = priceFieldWrapper.querySelector('input[name="price"]');
+    const priceInput = priceFieldWrapper.querySelector('input[name="price"]') as HTMLInputElement | null;
 
     priceFieldWrapper.style.display = isFree ? 'none' : 'block';
 
@@ -112,22 +185,56 @@ const { cancelHref = '/dashboard' } = Astro.props;
     }
   };
 
+  visibilityField?.addEventListener('change', updateInstitutionalVisibility);
   isFreeField?.addEventListener('change', updatePriceVisibility);
+  updateInstitutionalVisibility();
   updatePriceVisibility();
+
+  const readImageFile = (file: Blob) => {
+    if (!file) return Promise.resolve(undefined);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
+      reader.readAsDataURL(file);
+    });
+  };
 
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
+
+    const token = getAccessToken();
+    if (!token) {
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = 'Tu sesión expiró. Iniciá sesión nuevamente.';
+      }
+      window.location.href = '/login';
+      return;
+    }
+
     const formData = new FormData(form);
+    const visibility = String(formData.get('visibility') ?? 'PUBLIC');
     const startDateRaw = formData.get('startDate');
     const endDateRaw = formData.get('endDate');
     const startDate = startDateRaw ? new Date(String(startDateRaw)) : null;
-    const endDate = endDateRaw ? new Date(String(endDateRaw)) : null;
+    const endDate = endDateRaw ? new Date(String(endDateRaw)) : startDate ? new Date(startDate.getTime()) : null;
     const isFree = String(formData.get('isFree') ?? 'true') === 'true';
     const location = String(formData.get('location') ?? '').trim();
     const city = String(formData.get('city') ?? '').trim();
     const province = String(formData.get('province') ?? '').trim();
+    const institutionId = String(formData.get('institutionId') ?? '').trim();
     const provinceLabel = province === 'CABA' ? 'CABA' : province ? `Prov. ${province}` : '';
     const formattedLocation = [location, city, provinceLabel].filter(Boolean).join(' - ');
+    const coverImage = String(formData.get('coverImage') ?? '').trim() || undefined;
+
+    if (visibility === 'INSTITUTION' && !institutionId) {
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = 'Seleccioná la institución a la que pertenece este evento institucional.';
+      }
+      return;
+    }
 
     if (startDate && startDate < new Date()) {
       if (statusBox) {
@@ -149,29 +256,32 @@ const { cancelHref = '/dashboard' } = Astro.props;
       title: String(formData.get('title') ?? '').trim(),
       description: String(formData.get('description') ?? '').trim() || undefined,
       category: formData.get('category') || 'OTHER',
-      visibility: formData.get('visibility') || 'PUBLIC',
+      visibility,
+      institutionId: visibility === 'INSTITUTION' ? institutionId || undefined : undefined,
       startDate: startDate ? startDate.toISOString() : undefined,
       endDate: endDate ? endDate.toISOString() : undefined,
       location: formattedLocation || undefined,
       city: city || undefined,
-      province: province || undefined,
       country: 'Argentina',
-      tags: String(formData.get('tags') ?? '')
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-      maxAttendees: Number(formData.get('maxAttendees') ?? 0),
+      tags: visibility === 'INSTITUTION'
+        ? String(formData.get('tags') ?? '')
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : [],
+      maxAttendees: visibility === 'INSTITUTION' ? Number(formData.get('maxAttendees') ?? 0) : 0,
       isFree,
       price: isFree ? undefined : formData.get('price') ? Number(formData.get('price')) : undefined,
       website: String(formData.get('website') ?? '').trim() || undefined,
       registrationUrl: String(formData.get('registrationUrl') ?? '').trim() || undefined,
+      coverImage,
       status: 'PUBLISHED',
     };
 
-    if (!payload.title || !payload.startDate || !payload.endDate) {
+    if (!payload.title || !payload.startDate) {
       if (statusBox) {
         statusBox.style.display = 'block';
-        statusBox.textContent = 'Completá título e inicio/fin del evento.';
+        statusBox.textContent = 'Completá título e inicio del evento.';
       }
       return;
     }

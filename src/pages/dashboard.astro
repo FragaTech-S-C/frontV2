@@ -1,6 +1,36 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
+import EventCard from '@/components/EventCard.astro';
+
 const columnas = ['Mis eventos', 'Institucionales', 'Recomendados'];
+const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '');
+
+const initialEvents: Array<Record<string, unknown>> = [];
+type EventCardProps = {
+  event?: {
+    id?: string;
+    title?: string;
+    category?: string;
+    startDate?: string;
+    location?: string | null;
+    city?: string | null;
+    country?: string | null;
+    address?: string | null;
+    coverImage?: string | null;
+    bannerImage?: string | null;
+  };
+  id?: string;
+  title?: string;
+  category?: string;
+  startDate?: string;
+  location?: string | null;
+  city?: string | null;
+  country?: string | null;
+  address?: string | null;
+  coverImage?: string | null;
+  bannerImage?: string | null;
+};
+
 ---
 <AppLayout title="Dashboard">
   <div class="row">
@@ -10,18 +40,41 @@ const columnas = ['Mis eventos', 'Institucionales', 'Recomendados'];
   </div>
 
   <div id="dashboard-status" class="box" style="margin-bottom:1rem;display:none"></div>
-  <div class="grid" id="dashboard-grid"></div>
+  <div class="grid" id="dashboard-grid">
+    {initialEvents.map((event: EventCardProps) => (
+      <EventCard event={event} />
+    ))}
+  </div>
 
-  <script is:inline>
-    const apiBase = import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL;
-    if (!apiBase) {
-      throw new Error('Missing PUBLIC_API_URL or BACKEND_URL environment variable.');
-    }
-    const token = localStorage.getItem('meetia-access-token');
+  <script is:inline define:vars={{ apiBase }}>
+    const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
+    const getStoredToken = () => localStorage.getItem('meetia-access-token') ?? localStorage.getItem('accessToken') ?? localStorage.getItem('access_token') ?? '';
     const grid = document.getElementById('dashboard-grid');
     const status = document.getElementById('dashboard-status');
     const searchInput = document.getElementById('dashboard-search');
     const searchButton = document.getElementById('dashboard-search-btn');
+
+    const normalizeEvent = (entry) => {
+      const event = entry?.event ?? entry ?? {};
+      return {
+        ...event,
+        id: event.id ?? event._id,
+        title: event.title ?? event.name ?? 'Evento sin título',
+        category: event.category ?? event.type ?? 'Evento',
+        startDate: event.startDate ?? event.start_date ?? event.date ?? null,
+        coverImage: event.coverImage ?? event.cover_image ?? event.bannerImage ?? event.banner_image ?? null,
+        bannerImage: event.bannerImage ?? event.banner_image ?? event.coverImage ?? event.cover_image ?? null,
+        location: event.location ?? event.venue ?? null,
+        city: event.city ?? null,
+        country: event.country ?? null,
+        address: event.address ?? event.street ?? null,
+      };
+    };
+
+    const normalizeEvents = (payload) => {
+      const items = Array.isArray(payload) ? payload : (payload?.events ?? payload?.data ?? []);
+      return items.map(normalizeEvent).filter(Boolean);
+    };
 
     const formatArgentinaDate = (value) => {
       if (!value) return 'Sin fecha';
@@ -34,7 +87,7 @@ const columnas = ['Mis eventos', 'Institucionales', 'Recomendados'];
     };
 
     const formatLocation = (event) => {
-      const parts = [event.location, event.city, event.province, event.country].filter(Boolean);
+      const parts = [event.location, event.city, event.country, event.address].filter(Boolean);
       return parts.length ? parts.join(' - ') : 'Sin ubicación';
     };
 
@@ -42,56 +95,69 @@ const columnas = ['Mis eventos', 'Institucionales', 'Recomendados'];
       if (!grid) return;
       grid.innerHTML = '';
 
-      if (!events || events.length === 0) {
+      const items = normalizeEvents(events);
+      if (!items || items.length === 0) {
         status.style.display = 'block';
         status.textContent = 'No hay eventos para mostrar.';
         return;
       }
 
-      events.forEach((event) => {
+      items.forEach((event) => {
         const card = document.createElement('a');
         card.href = `/events/${event.id}`;
         card.className = 'box';
         card.style.textDecoration = 'none';
         card.style.color = 'inherit';
+        const imageUrl = event.coverImage || event.bannerImage;
         card.innerHTML = `
-          <div class="ph">${event.category || 'Evento'}</div>
+          ${imageUrl ? `<img src="${imageUrl}" alt="${event.title || 'Evento'}" style="width:100%;height:180px;object-fit:cover;border-radius:12px;display:block;" />` : '<div class="ph">Evento</div>'}
           <h3>${event.title || 'Evento sin título'}</h3>
           <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
         `;
         grid.appendChild(card);
       });
+
+      if (status) {
+        status.style.display = 'none';
+      }
     };
 
     const loadEvents = async (query = '') => {
+      const token = getStoredToken();
       if (!token) {
+        if (status) {
+          status.style.display = 'block';
+          status.textContent = 'Iniciá sesión para ver los eventos.';
+        }
         window.location.href = '/login';
         return;
       }
 
-      status.style.display = 'block';
-      status.textContent = 'Cargando eventos...';
+      if (status) {
+        status.style.display = 'block';
+        status.textContent = 'Cargando eventos...';
+      }
 
       try {
         const url = query
-          ? `${apiBase}/search?q=${encodeURIComponent(query)}&limit=6`
-          : `${apiBase}/events?limit=6`;
+          ? `${baseApiUrl}/search?q=${encodeURIComponent(query)}&limit=6`
+          : `${baseApiUrl}/events/upcoming?limit=6`;
 
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const payload = await response.json().catch(() => []);
+        const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(payload.message || 'No se pudieron cargar los eventos.');
+          throw new Error(payload.message || payload.error || 'No se pudieron cargar los eventos.');
         }
 
-        const events = Array.isArray(payload) ? payload : payload.events || [];
-        renderEvents(events);
-        status.style.display = 'none';
+        renderEvents(payload);
       } catch (error) {
-        status.style.display = 'block';
-        status.textContent = error.message || 'No se pudieron cargar los eventos.';
+        if (status) {
+          status.style.display = 'block';
+          status.textContent = error.message || 'No se pudieron cargar los eventos.';
+        }
       }
     };
 

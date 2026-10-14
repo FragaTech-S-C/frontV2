@@ -1,20 +1,281 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-import EventCard from '@/components/EventCard.astro';
-export function getStaticPaths() { return [{ params: { id: '1' } }, { params: { id: '2' } }]; }
+
+export function getStaticPaths() {
+  return [
+    { params: { id: 'las-girls' } },
+    { params: { id: 'tech-crew' } },
+    { params: { id: 'design-lab' } },
+    { params: { id: '1' } },
+    { params: { id: '2' } },
+  ];
+}
 ---
-<AppLayout title="Nombre del grupo">
-  <div class="grid">
-    <section class="box">
-      <h3>Miembros</h3>
-      <div class="ph">Usuario · rol</div><div class="ph">Usuario · rol</div>
-      <button class="btn out">Añadir miembro (solo LEADER)</button>
-    </section>
-    <section class="box">
-      <h3>Eventos del grupo</h3>
-      <EventCard />
-      <a class="btn" href="/events/new">Nuevo evento</a>
-    </section>
-  </div>
-  <div class="row"><button class="btn out">Aceptar invitación</button><button class="btn out">Salir del grupo</button></div>
+
+<AppLayout title="Grupo">
+  <div id="group-shell"></div>
+
+  <script>
+    (() => {
+      const shell = document.getElementById('group-shell');
+      if (!shell) return;
+
+      const currentPath = window.location.pathname.split('/').filter(Boolean).pop();
+      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
+      const slugify = (value = '') => String(value)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'grupo';
+
+      const group = groups.find((item) => String(item.slug || slugify(item.name || '')) === String(currentPath))
+        || groups.find((item) => String(item.id) === String(currentPath));
+
+      const defaultMembers = ['Yo', 'Ana', 'Mateo'];
+      const defaultEvents = [
+        { id: 'event-demo-1', title: 'Meetup de comunidad', startDate: '2026-10-18T19:00:00.000Z', location: 'CABA', country: 'Argentina' },
+        { id: 'event-demo-2', title: 'Workshop de diseño', startDate: '2026-10-25T18:30:00.000Z', location: 'Palermo', country: 'Argentina' },
+      ];
+
+      const members = Array.isArray(group?.members) && group.members.length ? group.members : defaultMembers;
+      const events = Array.isArray(group?.events) && group.events.length ? group.events : defaultEvents;
+
+      const cover = group?.coverImage
+        ? `<img src="${group.coverImage}" alt="${group.name || 'Grupo'}" class="group-cover" />`
+        : '<div class="group-cover placeholder">Portada del grupo</div>';
+
+      const avatar = group?.avatar
+        ? `<img src="${group.avatar}" alt="${group.name || 'Grupo'}" class="group-avatar" />`
+        : `<div class="group-avatar letter">${(group?.name || 'G').charAt(0).toUpperCase()}</div>`;
+
+      const memberList = members.map((member) => `<div class="member-pill">${member}</div>`).join('');
+
+      const eventList = events.map((event) => {
+        const date = event.startDate ? new Date(event.startDate) : null;
+        const formattedDate = date && !Number.isNaN(date.getTime())
+          ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+          : 'Sin fecha';
+
+        return `
+          <article class="mini-event">
+            <div class="mini-event__thumb">${event.category || 'Evento'}</div>
+            <div>
+              <strong>${event.title || 'Evento sin título'}</strong>
+              <p>${formattedDate}</p>
+              <p>${event.location || event.city || 'Sin ubicación'}</p>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      shell.innerHTML = `
+        <section class="box group-header">
+          ${cover}
+          <div class="group-summary">
+            <div class="group-title-row">
+              ${avatar}
+              <div>
+                <h2>${group?.name || 'Grupo sin nombre'}</h2>
+                <p>${group?.type === 'institutional' ? 'Grupo institucional' : 'Grupo personal'} · ${group?.leader || 'Líder'}</p>
+              </div>
+            </div>
+            <p>${group?.description || 'Sin descripción aún.'}</p>
+            <div class="row">
+              <a class="btn" href="/events/new">Crear evento</a>
+              <button class="btn out" type="button">Invitar miembro</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="group-grid">
+          <section class="box">
+            <h3>Administrar grupo</h3>
+            <div class="status-row">
+              <span>Miembros</span>
+              <strong>${members.length}</strong>
+            </div>
+            <div class="status-row">
+              <span>Privacidad</span>
+              <strong>${group?.type === 'institutional' ? 'Institucional' : 'Personal'}</strong>
+            </div>
+            <div class="status-row">
+              <span>Estado</span>
+              <strong>Activo</strong>
+            </div>
+          </section>
+
+          <section class="box">
+            <h3>Crear nuevo evento</h3>
+            <p>Prepará una nueva actividad para este grupo.</p>
+            <a class="btn" href="/events/new">Ir al formulario</a>
+          </section>
+
+          <section class="box">
+            <h3>Miembros</h3>
+            <div class="member-list">${memberList || '<p>No hay miembros aún.</p>'}</div>
+            <button class="btn out" type="button">Gestionar miembros</button>
+          </section>
+
+          <section class="box chat-box">
+            <h3>Chat del grupo</h3>
+            <p>Próximamente: chat interno del grupo.</p>
+            <div class="chat-placeholder">Chat en construcción</div>
+          </section>
+
+          <section class="box events-box">
+            <h3>Eventos del grupo</h3>
+            <div class="mini-event-list">${eventList || '<p>No hay eventos creados.</p>'}</div>
+          </section>
+        </div>
+      `;
+    })();
+  </script>
+
+  <style>
+    .group-header {
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .group-cover {
+      display: block;
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      background: #dfe7ff;
+    }
+
+    .group-cover.placeholder {
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #eaf0ff, #eefbf6);
+      color: #4b5b9d;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .group-summary {
+      padding: 1.25rem 1.25rem 1.4rem;
+    }
+
+    .group-title-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .group-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #e6e7ff;
+      display: block;
+    }
+
+    .group-avatar.letter {
+      display: grid;
+      place-items: center;
+      background: #dfe6ff;
+      color: #2f5d8a;
+      font-weight: 700;
+      font-size: 1.5rem;
+    }
+
+    .group-summary h2 {
+      margin: 0 0 0.25rem;
+      font-size: 1.6rem;
+    }
+
+    .group-summary p {
+      color: #4b5563;
+    }
+
+    .group-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.7rem 0;
+      border-bottom: 1px solid #e5e7eb;
+      color: #374151;
+    }
+
+    .member-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0 1rem;
+    }
+
+    .member-pill {
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3749b8;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .chat-placeholder {
+      margin-top: 1rem;
+      min-height: 130px;
+      border: 1px dashed #bac5dd;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #f8fafc;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .mini-event-list {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+
+    .mini-event {
+      display: flex;
+      gap: 0.8rem;
+      align-items: center;
+      padding: 0.6rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #fafafa;
+    }
+
+    .mini-event__thumb {
+      width: 54px;
+      height: 54px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #dbeafe, #e0e7ff);
+      display: grid;
+      place-items: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #3b4fb5;
+      flex-shrink: 0;
+    }
+
+    .mini-event strong {
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+
+    .mini-event p {
+      margin: 0;
+      color: #4b5563;
+      font-size: 0.82rem;
+    }
+  </style>
 </AppLayout>

@@ -1,5 +1,6 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
+import { api, getApiBaseUrl } from '@/lib/api';
 ---
 <AppLayout title="Buscar eventos">
   <form id="search-form" class="row">
@@ -12,10 +13,15 @@ import AppLayout from '@/layouts/AppLayout.astro';
   <div id="search-status" class="box" style="margin-bottom:1rem;display:none"></div>
   <div id="search-results" class="grid"></div>
 
-  <script is:inline>
-    const apiBase = import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL;
-    if (!apiBase) {
-      throw new Error('Missing PUBLIC_API_URL or BACKEND_URL environment variable.');
+  <script is:inline define:vars={{ apiBase: (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '') }}>
+    const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
+    if (!baseApiUrl) {
+      const status = document.getElementById('search-status');
+      if (status) {
+        status.style.display = 'block';
+        status.textContent = 'La API no está configurada. Agregá PUBLIC_API_URL o BACKEND_URL en tu entorno.';
+      }
+      return;
     }
     const token = localStorage.getItem('meetia-access-token');
     const form = document.getElementById('search-form');
@@ -34,7 +40,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
     };
 
     const formatLocation = (event) => {
-      const parts = [event.location, event.city, event.province, event.country].filter(Boolean);
+      const parts = [event.location, event.city, event.country, event.address].filter(Boolean);
       return parts.length ? parts.join(' - ') : 'Sin ubicación';
     };
 
@@ -56,8 +62,9 @@ import AppLayout from '@/layouts/AppLayout.astro';
         card.className = 'box';
         card.style.textDecoration = 'none';
         card.style.color = 'inherit';
+        const imageUrl = event.coverImage || event.bannerImage;
         card.innerHTML = `
-          <div class="ph">${event.category || 'Evento'}</div>
+          ${imageUrl ? `<img src="${imageUrl}" alt="${event.title || 'Evento'}" style="width:100%;height:180px;object-fit:cover;border-radius:12px;display:block;" />` : '<div class="ph">Evento</div>'}
           <h3>${event.title || 'Evento sin título'}</h3>
           <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
         `;
@@ -75,7 +82,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
       status.textContent = 'Buscando eventos...';
 
       try {
-        const url = `${apiBase}/search?q=${encodeURIComponent(query || 'evento')}&limit=6`;
+        const url = `${baseApiUrl}/search?q=${encodeURIComponent(query || 'evento')}&limit=6`;
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });

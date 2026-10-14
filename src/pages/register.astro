@@ -27,16 +27,17 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
         email: String(formData.get('email') ?? '').trim(),
         password: String(formData.get('password') ?? '').trim(),
       };
-      
+
       try {
-        if(!registerStatus) throw new Error("Missing register")
+        if (!registerStatus) throw new Error('Missing register');
         registerStatus.textContent = 'Creando cuenta...';
         const data = await api.register(payload);
         setStoredAuth(data);
         window.location.href = '/dashboard';
       } catch (error) {
-        alert(error instanceof Error ? error.message : 'No se pudo registrar al usuario.');
-        // registerStatus.textContent = ;
+        if (registerStatus) {
+          registerStatus.textContent = error instanceof Error ? error.message : 'No se pudo registrar al usuario.';
+        }
       }
     });
   </script>
