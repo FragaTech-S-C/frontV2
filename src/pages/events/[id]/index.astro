@@ -1,43 +1,295 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-import { type APIContext } from 'astro';
 
-export function getStaticPaths() { return [{ params: { id: '1' } }]; }
+export function getStaticPaths() {
+  return [{ params: { id: '1' } }];
+}
+
 const { id } = Astro.params;
+const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '');
 ---
-<AppLayout title="Nombre del evento">
-  
-  <!--
-  <p>Fecha · Lugar · Categoría · Organizador</p>
-  <div class="grid">
-    <section class="box">
-      <h3>Descripción y notas</h3>
-      <p>Archivos, documentos y ubicaciones del evento.</p>
-      <h3>Asistentes</h3>
-      <div class="ph">Avatares</div>
-    </section>
-    <aside class="box">
-      <a href={`/events/${id}/route`} class="ph" style="text-decoration:none">Mini mapa — ver ruta</a>
-        <button class="btn" id="confirm" onclick="">Confirmar asistencia</button>
-        <button class="btn out" id="invite">Invitar</button>
-        <button class="btn out" id="leave_event">Abandonar evento</button>
-    </aside>
-  </div>
-  <div class="row">
-    <a class="btn out" href={`/events/${id}/edit`}>Editar evento</a>
-    <button class="btn out">Dejar review</button>
-    <button class="btn out">Denunciar</button>
+
+<AppLayout title="Evento">
+  <div class="event-page">
+    <div id="event-status" class="ph" style="display:none"></div>
+
+    <div class="grid event-layout">
+      <section class="box event-main">
+        <img id="event-cover" class="event-cover" alt="Portada del evento" />
+
+        <div class="event-header">
+          <div>
+            <span id="event-category" class="tag"></span>
+            <h2 id="event-title">Cargando evento...</h2>
+          </div>
+        </div>
+
+        <p id="event-meta" class="event-meta"></p>
+
+        <div>
+          <h3>Descripción</h3>
+          <p id="event-description" class="muted"></p>
+        </div>
+
+        <div class="row event-tags-row">
+          <h3 class="event-section-title">Etiquetas</h3>
+          <div id="event-tags" class="row event-tags"></div>
+        </div>
+
+        <div class="event-details">
+          <div class="detail-item">
+            <span class="detail-label">Estado</span>
+            <strong id="event-status-text"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Visibilidad</span>
+            <strong id="event-visibility"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Inicio</span>
+            <strong id="event-startDate"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Fin</span>
+            <strong id="event-endDate"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Lugar</span>
+            <strong id="event-location"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Ciudad</span>
+            <strong id="event-city"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Provincia</span>
+            <strong id="event-province"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">País</span>
+            <strong id="event-country"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Dirección</span>
+            <strong id="event-address"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Cupo máximo</span>
+            <strong id="event-maxAttendees"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Precio</span>
+            <strong id="event-price"></strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Gratuito</span>
+            <strong id="event-isFree"></strong>
+          </div>
+          <div class="detail-item detail-item-wide">
+            <span class="detail-label">Sitio web</span>
+            <a id="event-website" href="#" target="_blank" rel="noreferrer"></a>
+          </div>
+          <div class="detail-item detail-item-wide">
+            <span class="detail-label">Inscripción</span>
+            <a id="event-registrationUrl" href="#" target="_blank" rel="noreferrer"></a>
+          </div>
+          <div class="detail-item detail-item-wide">
+            <span class="detail-label">Institución</span>
+            <strong id="event-institutionId"></strong>
+          </div>
+        </div>
+      </section>
+
+      <aside class="box event-sidebar">
+        <h3>Acciones</h3>
+        <button id="confirm" class="btn" type="button">Confirmar asistencia</button>
+        <button id="leave_event" class="btn out" type="button">Abandonar evento</button>
+
+        <div class="ph event-route-box">
+          <a href={`/events/${id}/route`} class="event-route-link">Ver ruta</a>
+        </div>
+      </aside>
+    </div>
   </div>
 
-  <script>
-    const AssistConfirm =  document.getElementById("confirm")?.addEventListener("onclick", () => {
-        
-    });
-    const Invite = document.getElementById("invite");
-    const Leave = document.getElementById("leave_event");
+  <script is:inline define:vars={{ apiBase, eventId: id }}>
+    const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
+    const currentEventId = String(eventId || '').trim();
 
-    
-    
+    const getStoredToken = () =>
+      localStorage.getItem('meetia-access-token') ??
+      localStorage.getItem('accessToken') ??
+      localStorage.getItem('access_token') ??
+      '';
+
+    const statusBox = document.getElementById('event-status');
+    const coverEl = document.getElementById('event-cover');
+    const categoryEl = document.getElementById('event-category');
+    const titleEl = document.getElementById('event-title');
+    const metaEl = document.getElementById('event-meta');
+    const descriptionEl = document.getElementById('event-description');
+    const tagsEl = document.getElementById('event-tags');
+    const statusTextEl = document.getElementById('event-status-text');
+    const visibilityEl = document.getElementById('event-visibility');
+    const startDateEl = document.getElementById('event-startDate');
+    const endDateEl = document.getElementById('event-endDate');
+    const locationEl = document.getElementById('event-location');
+    const cityEl = document.getElementById('event-city');
+    const provinceEl = document.getElementById('event-province');
+    const countryEl = document.getElementById('event-country');
+    const addressEl = document.getElementById('event-address');
+    const maxAttendeesEl = document.getElementById('event-maxAttendees');
+    const priceEl = document.getElementById('event-price');
+    const isFreeEl = document.getElementById('event-isFree');
+    const websiteEl = document.getElementById('event-website');
+    const registrationUrlEl = document.getElementById('event-registrationUrl');
+    const institutionIdEl = document.getElementById('event-institutionId');
+
+    const setText = (el, value, fallback = 'No especificado') => {
+      if (!el) return;
+      el.textContent = value || fallback;
+    };
+
+    const setLink = (el, href, label = 'Ver enlace') => {
+      if (!el) return;
+      if (!href) {
+        el.textContent = 'No especificado';
+        el.removeAttribute('href');
+        return;
+      }
+      el.href = href;
+      el.textContent = label;
+    };
+
+    const formatDate = (value) => {
+      if (!value) return 'No especificado';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date);
+    };
+
+    const renderTags = (tags) => {
+      if (!tagsEl) return;
+      tagsEl.innerHTML = '';
+
+      const list = Array.isArray(tags) ? tags : [];
+      if (!list.length) {
+        const chip = document.createElement('span');
+        chip.className = 'tag secondary';
+        chip.textContent = 'Sin etiquetas';
+        tagsEl.appendChild(chip);
+        return;
+      }
+
+      list.forEach((tag) => {
+        const chip = document.createElement('span');
+        chip.className = 'tag secondary';
+        chip.textContent = tag;
+        tagsEl.appendChild(chip);
+      });
+    };
+
+    const renderEvent = (event) => {
+      if (coverEl) {
+        coverEl.src = event.coverImage || event.bannerImage || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80';
+      }
+
+      setText(categoryEl, event.category || 'EVENTO');
+      setText(titleEl, event.title || 'Evento sin título');
+      setText(metaEl,
+        `${event.category || 'Evento'} · ${event.visibility || 'PUBLIC'} · ${formatDate(event.startDate)}`);
+      setText(descriptionEl, event.description || 'No hay descripción disponible para este evento.');
+      setText(statusTextEl, event.status || 'PUBLISHED');
+      setText(visibilityEl, event.visibility || 'PUBLIC');
+      setText(startDateEl, formatDate(event.startDate));
+      setText(endDateEl, formatDate(event.endDate));
+      setText(locationEl, event.location || 'No especificado');
+      setText(cityEl, event.city || 'No especificado');
+      setText(provinceEl, event.province || 'No especificado');
+      setText(countryEl, event.country || 'No especificado');
+      setText(addressEl, event.address || 'No especificado');
+      setText(maxAttendeesEl, event.maxAttendees ? `${event.maxAttendees}` : 'Sin límite');
+      setText(priceEl, event.isFree ? 'Gratis' : (event.price ? `$${event.price}` : 'No especificado'));
+      setText(isFreeEl, event.isFree ? 'Sí' : 'No');
+      setLink(websiteEl, event.website, 'Abrir sitio web');
+      setLink(registrationUrlEl, event.registrationUrl, 'Registrarse');
+      setText(institutionIdEl, event.institutionId || 'No especificado');
+      renderTags(event.tags || []);
+    };
+
+    const setStatus = (message, isError = false) => {
+      if (!statusBox) return;
+      statusBox.style.display = 'block';
+      statusBox.textContent = message;
+      statusBox.style.borderColor = isError ? '#b91c1c' : '#2f5d8a';
+      statusBox.style.color = isError ? '#7f1d1d' : '#1f2937';
+    };
+
+    const actionRequest = async (url) => {
+      const token = getStoredToken();
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${baseApiUrl}${url}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'No se pudo completar la acción.');
+        }
+
+        setStatus('Acción realizada correctamente.');
+        setTimeout(() => window.location.reload(), 400);
+      } catch (error) {
+        setStatus(error.message || 'No se pudo completar la acción.', true);
+      }
+    };
+
+    const loadEvent = async () => {
+      const token = getStoredToken();
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      setStatus('Cargando evento...');
+
+      try {
+        const response = await fetch(`${baseApiUrl}/events/${currentEventId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'No se pudo cargar el evento.');
+        }
+
+        renderEvent(payload);
+        statusBox.style.display = 'none';
+      } catch (error) {
+        setStatus(error.message || 'No se pudo cargar el evento.', true);
+      }
+    };
+
+    document.getElementById('confirm')?.addEventListener('click', () => actionRequest(`/events/${currentEventId}/attend`));
+    document.getElementById('leave_event')?.addEventListener('click', () => actionRequest(`/events/${currentEventId}/leave`));
+
+    loadEvent();
   </script>
-   -->
 </AppLayout>
