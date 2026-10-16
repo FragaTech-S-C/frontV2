@@ -44,15 +44,29 @@ import { api, getApiBaseUrl } from '@/lib/api';
       return parts.length ? parts.join(' - ') : 'Sin ubicación';
     };
 
+    // El backend devuelve { type, id, title, metadata: {...} }.
+    // Aplanamos metadata para tener coverImage, startDate, location, etc. al nivel del evento.
+    const normalizeEvent = (entry) => {
+      const base = entry?.event ?? entry ?? {};
+      const meta = base.metadata ?? {};
+      const event = { ...base, ...meta };
+      return {
+        ...event,
+        id: event.id ?? event._id,
+        title: event.title ?? event.name ?? 'Evento sin título',
+        startDate: event.startDate ?? event.start_date ?? event.date ?? null,
+        coverImage: event.coverImage ?? event.cover_image ?? event.bannerImage ?? event.banner_image ?? null,
+        bannerImage: event.bannerImage ?? event.banner_image ?? event.coverImage ?? event.cover_image ?? null,
+      };
+    };
+
     const renderResults = (items) => {
       if (!results) return;
       results.innerHTML = '';
 
-      // El backend devuelve { type, id, title, metadata: {...} }.
-      // Nos quedamos solo con eventos y aplanamos metadata.
       const mapped = (items || [])
         .filter((entry) => !entry.type || entry.type === 'event')
-        .map((entry) => ({ id: entry.id, title: entry.title, ...(entry.metadata || {}) }));
+        .map(normalizeEvent);
 
       if (mapped.length === 0) {
         status.style.display = 'block';

@@ -1,0 +1,69 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import { type APIContext } from 'astro';
+
+export const prerender = false;
+export function getStaticPaths() { return [{ params: { id: '1' } }]; }
+const { id } = Astro.params;
+---
+<AppLayout title="Nombre del evento">
+  <p>Fecha · Lugar · Categoría · Organizador</p>
+  <div class="grid">
+    <section class="box">
+      <h3>Descripción y notas</h3>
+      <p>Archivos, documentos y ubicaciones del evento.</p>
+      <h3>Asistentes</h3>
+      <div class="ph">Avatares</div>
+    </section>
+    <aside class="box">
+      <a href={`/events/${id}/route`} class="ph" style="text-decoration:none">Mini mapa — ver ruta</a>
+      <button class="btn" id="confirm" type="button">Confirmar asistencia</button>
+      <button class="btn out" id="invite" type="button">Invitar</button>
+      <button class="btn out" id="leave_event" type="button">Abandonar evento</button>
+    </aside>
+  </div>
+  <div class="row">
+    <a class="btn out" href={`/events/${id}/edit`}>Editar evento</a>
+    <button class="btn out" type="button">Dejar review</button>
+    <button class="btn out" type="button">Denunciar</button>
+  </div>
+
+  <script type="module">
+    import { api } from '@/lib/api';
+
+    const eventId = '${id}';
+    const confirmButton = document.getElementById('confirm');
+    const inviteButton = document.getElementById('invite');
+    const leaveButton = document.getElementById('leave_event');
+
+    confirmButton?.addEventListener('click', async () => {
+      try {
+        await api.confirmAssistance(eventId);
+        confirmButton.textContent = 'Asistencia confirmada';
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'No se pudo confirmar la asistencia.');
+      }
+    });
+
+    inviteButton?.addEventListener('click', async () => {
+      try {
+        const result = await api.inviteToEvent(eventId);
+        inviteButton.textContent = result?.message ? 'Invitación enviada' : 'Invitar';
+        if (result?.message) {
+          alert(result.message);
+        }
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'No se pudo invitar a este evento.');
+      }
+    });
+
+    leaveButton?.addEventListener('click', async () => {
+      try {
+        await api.leaveEvent(eventId);
+        leaveButton.textContent = 'Has abandonado el evento';
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'No se pudo abandonar el evento.');
+      }
+    });
+  </script>
+</AppLayout>
