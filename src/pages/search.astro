@@ -2,9 +2,9 @@
 import AppLayout from '@/layouts/AppLayout.astro';
 import { api, getApiBaseUrl } from '@/lib/api';
 ---
-<AppLayout title="Buscar eventos">
+<AppLayout title="Discover">
   <form id="search-form" class="row">
-    <input id="search-input" class="grow" type="search" aria-label="Buscar" placeholder="Metabuscador de eventos" />
+    <input id="search-input" class="grow" type="search" aria-label="Buscar" placeholder="Buscar eventos" />
     <button class="btn" type="submit">Buscar</button>
   </form>
   <div class="row">
@@ -44,17 +44,35 @@ import { api, getApiBaseUrl } from '@/lib/api';
       return parts.length ? parts.join(' - ') : 'Sin ubicación';
     };
 
+    // El backend devuelve { type, id, title, metadata: {...} }.
+    // Aplanamos metadata para tener coverImage, startDate, location, etc. al nivel del evento.
+    const normalizeEvent = (entry) => {
+      const base = entry?.event ?? entry ?? {};
+      const meta = base.metadata ?? {};
+      const event = { ...base, ...meta };
+      return {
+        ...event,
+        id: event.id ?? event._id,
+        title: event.title ?? event.name ?? 'Evento sin título',
+        startDate: event.startDate ?? event.start_date ?? event.date ?? null,
+        coverImage: event.coverImage ?? event.cover_image ?? event.bannerImage ?? event.banner_image ?? null,
+        bannerImage: event.bannerImage ?? event.banner_image ?? event.coverImage ?? event.cover_image ?? null,
+      };
+    };
+
     const renderResults = (items) => {
       if (!results) return;
       results.innerHTML = '';
 
-      if (!items || items.length === 0) {
+      const mapped = (items || [])
+        .filter((entry) => !entry.type || entry.type === 'event')
+        .map(normalizeEvent);
+
+      if (mapped.length === 0) {
         status.style.display = 'block';
         status.textContent = 'No se encontraron resultados.';
         return;
       }
-
-      const mapped = items.map((entry) => entry.event || entry);
 
       mapped.forEach((event) => {
         const card = document.createElement('a');
@@ -82,7 +100,9 @@ import { api, getApiBaseUrl } from '@/lib/api';
       status.textContent = 'Buscando eventos...';
 
       try {
-        const url = `${baseApiUrl}/search?q=${encodeURIComponent(query || 'evento')}&limit=6`;
+        const params = new URLSearchParams({ types: 'event', limit: '24' });
+        if (query) params.set('q', query);
+        const url = `${baseApiUrl}/search?${params}`;
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -92,8 +112,9 @@ import { api, getApiBaseUrl } from '@/lib/api';
           throw new Error(payload.message || 'La búsqueda falló.');
         }
 
-        renderResults(Array.isArray(payload) ? payload : payload.events || []);
+        // Ocultar antes de renderizar, así no tapa el mensaje de "sin resultados".
         status.style.display = 'none';
+        renderResults(Array.isArray(payload) ? payload : payload.events || []);
       } catch (error) {
         status.style.display = 'block';
         status.textContent = error.message || 'No se pudo completar la búsqueda.';
@@ -105,6 +126,6 @@ import { api, getApiBaseUrl } from '@/lib/api';
       loadSearch(input.value.trim());
     });
 
-    loadSearch('evento');
+    loadSearch('');
   </script>
 </AppLayout>
