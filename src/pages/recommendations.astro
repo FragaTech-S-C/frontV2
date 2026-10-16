@@ -8,17 +8,16 @@ import AppLayout from '@/layouts/AppLayout.astro';
 
   <script is:inline define:vars={{ apiBase: (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '') }}>
     const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
+    const status = document.getElementById('recommendations-status');
+
     if (!baseApiUrl) {
-      const status = document.getElementById('recommendations-status');
       if (status) {
         status.style.display = 'block';
         status.textContent = 'La API no está configurada. Agregá PUBLIC_API_URL o BACKEND_URL en tu entorno.';
       }
-      return;
-    }
-    const token = localStorage.getItem('meetia-access-token');
-    const grid = document.getElementById('recommendations-grid');
-    const status = document.getElementById('recommendations-status');
+    } else {
+      const token = localStorage.getItem('meetia-access-token');
+      const grid = document.getElementById('recommendations-grid');
 
     const formatArgentinaDate = (value) => {
       if (!value) return 'Sin fecha';
@@ -90,5 +89,6 @@ import AppLayout from '@/layouts/AppLayout.astro';
     };
 
     loadRecommendations();
+    }
   </script>
 </AppLayout>

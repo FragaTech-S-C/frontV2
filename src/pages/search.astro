@@ -15,19 +15,18 @@ import { api, getApiBaseUrl } from '@/lib/api';
 
   <script is:inline define:vars={{ apiBase: (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '') }}>
     const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
+    const status = document.getElementById('search-status');
+
     if (!baseApiUrl) {
-      const status = document.getElementById('search-status');
       if (status) {
         status.style.display = 'block';
         status.textContent = 'La API no está configurada. Agregá PUBLIC_API_URL o BACKEND_URL en tu entorno.';
       }
-      return;
-    }
-    const token = localStorage.getItem('meetia-access-token');
-    const form = document.getElementById('search-form');
-    const input = document.getElementById('search-input');
-    const results = document.getElementById('search-results');
-    const status = document.getElementById('search-status');
+    } else {
+      const token = localStorage.getItem('meetia-access-token');
+      const form = document.getElementById('search-form');
+      const input = document.getElementById('search-input');
+      const results = document.getElementById('search-results');
 
     const formatArgentinaDate = (value) => {
       if (!value) return 'Sin fecha';
@@ -44,17 +43,46 @@ import { api, getApiBaseUrl } from '@/lib/api';
       return parts.length ? parts.join(' - ') : 'Sin ubicación';
     };
 
+    const normalizeSearchItem = (entry) => {
+      const item = entry?.event ?? entry ?? {};
+      const metadata = item.metadata ?? {};
+
+      return {
+        id: item.id ?? metadata.id,
+        title: item.title ?? metadata.title ?? 'Evento sin título',
+        category: metadata.category ?? 'Evento',
+        startDate: metadata.startDate ?? item.startDate ?? item.date ?? null,
+        endDate: metadata.endDate ?? null,
+        location: metadata.location ?? item.location ?? null,
+        city: metadata.city ?? item.city ?? null,
+        country: metadata.country ?? item.country ?? null,
+        address: metadata.address ?? item.address ?? null,
+        coverImage: metadata.coverImage ?? item.coverImage ?? metadata.bannerImage ?? item.bannerImage ?? null,
+        bannerImage: metadata.bannerImage ?? item.bannerImage ?? metadata.coverImage ?? item.coverImage ?? null,
+      };
+    };
+
     const renderResults = (items) => {
       if (!results) return;
       results.innerHTML = '';
 
-      if (!items || items.length === 0) {
+      const list = Array.isArray(items) ? items : [];
+      if (!list.length) {
         status.style.display = 'block';
         status.textContent = 'No se encontraron resultados.';
         return;
       }
 
-      const mapped = items.map((entry) => entry.event || entry);
+      const mapped = list
+        .filter((entry) => entry && (entry.type === 'event' || entry.event || entry.metadata || entry.id))
+        .map(normalizeSearchItem)
+        .filter((event) => event && event.id);
+
+      if (!mapped.length) {
+        status.style.display = 'block';
+        status.textContent = 'No se encontraron resultados.';
+        return;
+      }
 
       mapped.forEach((event) => {
         const card = document.createElement('a');
@@ -82,7 +110,7 @@ import { api, getApiBaseUrl } from '@/lib/api';
       status.textContent = 'Buscando eventos...';
 
       try {
-        const url = `${baseApiUrl}/search?q=${encodeURIComponent(query || 'evento')}&limit=6`;
+        const url = `${baseApiUrl}/search?types=event&q=${encodeURIComponent(query || 'evento')}&limit=6`;
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -106,5 +134,6 @@ import { api, getApiBaseUrl } from '@/lib/api';
     });
 
     loadSearch('evento');
+    }
   </script>
 </AppLayout>

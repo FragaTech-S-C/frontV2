@@ -1,9 +1,7 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
 
-export function getStaticPaths() {
-  return [{ params: { id: '1' } }];
-}
+export const prerender = false;
 
 const { id } = Astro.params;
 const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '');
