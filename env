@@ -1,0 +1,10 @@
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_NAME=meetia
+DATABASE_URL="postgresql://neondb_owner:npg_qldezAPT9W0j@ep-snowy-pond-b4fmcu3a-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+JWT_SECRET="dejame correr tu tanga"
+JWT_EXPIRES_IN=24h
+JWT_REFRESH_EXPIRES_IN=7d
+CORS_ORIGIN=http://localhost:4321
