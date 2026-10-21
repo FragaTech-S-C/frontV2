@@ -103,6 +103,16 @@ const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?
         <button id="confirm" class="btn" type="button">Confirmar asistencia</button>
         <button id="leave_event" class="btn out" type="button">Abandonar evento</button>
 
+        <div class="invite-box">
+          <h3>Invitar usuarios</h3>
+          <label for="invite-user-select">Seleccioná un usuario</label>
+          <select id="invite-user-select" class="input" style="width:100%; margin-top:0.5rem;">
+            <option value="">Elegir usuario</option>
+          </select>
+          <button id="invite-user-btn" class="btn" type="button" style="margin-top:0.75rem; width:100%;">Invitar</button>
+          <div id="invite-user-status" class="ph" style="display:none; margin-top:0.75rem;"></div>
+        </div>
+
         <div class="ph event-route-box">
           <a href={`/events/${id}/route`} class="event-route-link">Ver ruta</a>
         </div>
@@ -229,6 +239,44 @@ const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?
       statusBox.style.color = isError ? '#7f1d1d' : '#1f2937';
     };
 
+    const setInviteStatus = (message, isError = false) => {
+      const inviteStatus = document.getElementById('invite-user-status');
+      if (!inviteStatus) return;
+      inviteStatus.style.display = 'block';
+      inviteStatus.textContent = message;
+      inviteStatus.style.borderColor = isError ? '#b91c1c' : '#2f5d8a';
+      inviteStatus.style.color = isError ? '#7f1d1d' : '#1f2937';
+    };
+
+    const mockUsers = [
+      { id: 'user-1', name: 'María López' },
+      { id: 'user-2', name: 'Mateo Silva' },
+      { id: 'user-3', name: 'Lucía Torres' },
+      { id: 'user-4', name: 'Diego Ruiz' },
+    ];
+
+    const populateInviteUsers = () => {
+      const select = document.getElementById('invite-user-select');
+      if (!select) return;
+
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">Elegir usuario</option>' + mockUsers
+        .map((user) => `<option value="${user.id}">${user.name}</option>`)
+        .join('');
+      if (currentValue) select.value = currentValue;
+    };
+
+    const saveInvitation = (payload) => {
+      try {
+        const all = JSON.parse(localStorage.getItem('meetia-invitations') || '[]');
+        const next = Array.isArray(all) ? all : [];
+        next.unshift(payload);
+        localStorage.setItem('meetia-invitations', JSON.stringify(next));
+      } catch (error) {
+        console.warn('No se pudieron guardar invitaciones mock:', error);
+      }
+    };
+
     const actionRequest = async (url) => {
       const token = getStoredToken();
       if (!token) {
@@ -285,9 +333,62 @@ const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?
       }
     };
 
+    const sendEventInvite = async () => {
+      const select = document.getElementById('invite-user-select');
+      const userId = select?.value;
+      if (!userId) {
+        setInviteStatus('Seleccioná un usuario para invitar.', true);
+        return;
+      }
+
+      const token = getStoredToken();
+      const selectedUser = mockUsers.find((user) => user.id === userId);
+      const payload = {
+        id: `inv-${Date.now()}`,
+        type: 'event',
+        targetId: currentEventId,
+        targetName: (document.getElementById('event-title')?.textContent || 'Evento').trim(),
+        senderName: 'Vos',
+        recipientName: selectedUser?.name || 'Usuario',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        message: `Te invitamos a participar en este evento.`,
+      };
+
+      if (!token) {
+        saveInvitation(payload);
+        setInviteStatus(`Invitación enviada a ${selectedUser?.name || 'este usuario'} (modo mock).`);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${baseApiUrl}/events/${currentEventId}/invite`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || data.error || 'No se pudo enviar la invitación.');
+        }
+
+        saveInvitation(payload);
+        setInviteStatus(`Invitación enviada a ${selectedUser?.name || 'este usuario'}.`);
+      } catch (error) {
+        saveInvitation(payload);
+        setInviteStatus(`${error.message || 'La invitación se guardó localmente.'} (fallback mock)`, true);
+      }
+    };
+
     document.getElementById('confirm')?.addEventListener('click', () => actionRequest(`/events/${currentEventId}/attend`));
     document.getElementById('leave_event')?.addEventListener('click', () => actionRequest(`/events/${currentEventId}/leave`));
+    document.getElementById('invite-user-btn')?.addEventListener('click', sendEventInvite);
 
+    populateInviteUsers();
     loadEvent();
   </script>
 </AppLayout>

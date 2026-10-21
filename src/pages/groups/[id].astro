@@ -16,29 +16,148 @@ export function getStaticPaths() {
   <div id="group-shell"></div>
 
   <script>
+    type GroupMember = string | { name?: string };
+
+    type GroupData = {
+      id?: string | number;
+      slug?: string;
+      name?: string;
+      coverImage?: string;
+      avatar?: string;
+      type?: string;
+      leader?: string;
+      description?: string;
+      members?: GroupMember[];
+      events?: Array<{
+        id?: string;
+        title?: string;
+        startDate?: string;
+        location?: string;
+        city?: string;
+        category?: string;
+      }>;
+    };
+
+    type InvitationPayload = {
+      id: string;
+      type: 'group';
+      targetId: string;
+      targetName: string;
+      senderName: string;
+      recipientName: string;
+      status: 'pending';
+      createdAt: string;
+      message: string;
+    };
+
     (() => {
-      const shell = document.getElementById('group-shell');
+      const shell = document.getElementById('group-shell') as HTMLElement | null;
       if (!shell) return;
 
-      const currentPath = window.location.pathname.split('/').filter(Boolean).pop();
-      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
-      const slugify = (value = '') => String(value)
+      const currentPath = window.location.pathname.split('/').filter(Boolean).pop() ?? '';
+      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]') as GroupData[];
+      const slugify = (value: string = ''): string => String(value)
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') || 'grupo';
 
-      const group = groups.find((item) => String(item.slug || slugify(item.name || '')) === String(currentPath))
-        || groups.find((item) => String(item.id) === String(currentPath));
+      const group = groups.find((item: GroupData) => String(item.slug || slugify(item.name || '')) === String(currentPath))
+        || groups.find((item: GroupData) => String(item.id) === String(currentPath));
+      const groupId = String(group?.id ?? currentPath ?? 'group-demo');
 
-      const defaultMembers = ['Yo', 'Ana', 'Mateo'];
+      const mockUsers = [
+        { id: 'user-1', name: 'María López' },
+        { id: 'user-2', name: 'Mateo Silva' },
+        { id: 'user-3', name: 'Lucía Torres' },
+        { id: 'user-4', name: 'Diego Ruiz' },
+      ];
+
+      const saveInvitation = (payload: InvitationPayload) => {
+        try {
+          const all = JSON.parse(localStorage.getItem('meetia-invitations') || '[]') as InvitationPayload[];
+          const next = Array.isArray(all) ? all : [];
+          next.unshift(payload);
+          localStorage.setItem('meetia-invitations', JSON.stringify(next));
+        } catch (error) {
+          console.warn('No se pudieron guardar invitaciones mock:', error);
+        }
+      };
+
+      const setInviteStatus = (message: string, isError: boolean = false) => {
+        const status = document.getElementById('group-invite-status') as HTMLDivElement | null;
+        if (!status) return;
+        status.style.display = 'block';
+        status.textContent = message;
+        status.style.borderColor = isError ? '#b91c1c' : '#2f5d8a';
+        status.style.color = isError ? '#7f1d1d' : '#1f2937';
+      };
+
+      const groupInvite = async (): Promise<void> => {
+        const select = document.getElementById('group-invite-user') as HTMLSelectElement | null;
+        const userId = select?.value ?? '';
+        if (!userId) {
+          setInviteStatus('Seleccioná un usuario para invitar.', true);
+          return;
+        }
+
+        const user = mockUsers.find((item) => item.id === userId);
+        const payload: InvitationPayload = {
+          id: `inv-${Date.now()}`,
+          type: 'group',
+          targetId: groupId,
+          targetName: group?.name || 'Grupo',
+          senderName: 'Vos',
+          recipientName: user?.name || 'Usuario',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          message: `Te invitamos a unirte a ${group?.name || 'este grupo'}.`,
+        };
+
+        saveInvitation(payload);
+        setInviteStatus(`Invitación creada para ${user?.name || 'este usuario'} (mock).`);
+      };
+
+      const joinGroup = async (): Promise<void> => {
+        const token = localStorage.getItem('meetia-access-token') || localStorage.getItem('accessToken') || localStorage.getItem('access_token') || '';
+        if (!groupId) return;
+
+        if (!token) {
+          setInviteStatus('Iniciá sesión para unirte o enviar invitaciones.', true);
+          return;
+        }
+
+        try {
+          const response = await fetch(`http://localhost:3000/api/groups/${groupId}/join`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.message || data.error || 'No se pudo unir al grupo.');
+          }
+          setInviteStatus('Solicitud enviada o unión completada correctamente.');
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'La solicitud quedó guardada localmente.';
+          setInviteStatus(message, true);
+        }
+      };
+
+      const inviteElement = document.getElementById('group-invite-user') as HTMLSelectElement | null;
+      if (inviteElement) {
+        inviteElement.innerHTML = '<option value="">Elegir usuario</option>' + mockUsers
+          .map((user) => `<option value="${user.id}">${user.name}</option>`)
+          .join('');
+      }
+
+      const defaultMembers: string[] = ['Yo', 'Ana', 'Mateo'];
       const defaultEvents = [
         { id: 'event-demo-1', title: 'Meetup de comunidad', startDate: '2026-10-18T19:00:00.000Z', location: 'CABA', country: 'Argentina' },
         { id: 'event-demo-2', title: 'Workshop de diseño', startDate: '2026-10-25T18:30:00.000Z', location: 'Palermo', country: 'Argentina' },
       ];
 
-      const members = Array.isArray(group?.members) && group.members.length ? group.members : defaultMembers;
+      const members: GroupMember[] = Array.isArray(group?.members) && group.members.length ? group.members : defaultMembers;
       const events = Array.isArray(group?.events) && group.events.length ? group.events : defaultEvents;
 
       const cover = group?.coverImage
@@ -49,9 +168,9 @@ export function getStaticPaths() {
         ? `<img src="${group.avatar}" alt="${group.name || 'Grupo'}" class="group-avatar" />`
         : `<div class="group-avatar letter">${(group?.name || 'G').charAt(0).toUpperCase()}</div>`;
 
-      const memberList = members.map((member) => `<div class="member-pill">${member}</div>`).join('');
+      const memberList = members.map((member: GroupMember) => `<div class="member-pill">${typeof member === 'string' ? member : member.name || 'Miembro'}</div>`).join('');
 
-      const eventList = events.map((event) => {
+      const eventList = events.map((event: { id?: string; title?: string; startDate?: string; location?: string; city?: string; category?: string; }) => {
         const date = event.startDate ? new Date(event.startDate) : null;
         const formattedDate = date && !Number.isNaN(date.getTime())
           ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
@@ -83,7 +202,16 @@ export function getStaticPaths() {
             <p>${group?.description || 'Sin descripción aún.'}</p>
             <div class="row">
               <a class="btn" href="/events/new">Crear evento</a>
-              <button class="btn out" type="button">Invitar miembro</button>
+              <button id="join-group-btn" class="btn" type="button">Unirme al grupo</button>
+            </div>
+
+            <div class="invite-block">
+              <label for="group-invite-user">Invitar miembro</label>
+              <select id="group-invite-user" class="input" style="width:100%; margin-top:0.5rem;">
+                <option value="">Elegir usuario</option>
+              </select>
+              <button id="group-invite-btn" class="btn out" type="button" style="margin-top:0.75rem; width:100%;">Enviar invitación</button>
+              <div id="group-invite-status" class="ph" style="display:none; margin-top:0.75rem;"></div>
             </div>
           </div>
         </section>
@@ -129,6 +257,9 @@ export function getStaticPaths() {
           </section>
         </div>
       `;
+
+      document.getElementById('group-invite-btn')?.addEventListener('click', groupInvite);
+      document.getElementById('join-group-btn')?.addEventListener('click', joinGroup);
     })();
   </script>
 
@@ -235,6 +366,12 @@ export function getStaticPaths() {
       background: #f8fafc;
       color: #64748b;
       font-weight: 600;
+    }
+
+    .invite-block {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e5e7eb;
     }
 
     .mini-event-list {

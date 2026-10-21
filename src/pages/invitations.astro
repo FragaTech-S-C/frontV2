@@ -2,10 +2,185 @@
 import AppLayout from '@/layouts/AppLayout.astro';
 ---
 <AppLayout title="Invitaciones">
-  <div class="box">
-    <!---
-    <div class="row"><span class="grow">Invitación a evento o grupo</span><button class="btn">Aceptar</button><button class="btn out">Rechazar</button></div>
-    <div class="row"><span class="grow">Invitación a evento o grupo</span><button class="btn">Aceptar</button><button class="btn out">Rechazar</button></div>
-     -->
-  </div>
+  <div id="invitations-shell" class="stack"></div>
+
+  <script is:inline>
+    (() => {
+      const defaultInvitations = [
+        {
+          id: 'inv-evt-1',
+          type: 'event',
+          targetId: 'evt-1',
+          targetName: 'Meetup de tecnología',
+          senderName: 'María López',
+          recipientName: 'Vos',
+          status: 'pending',
+          createdAt: '2026-10-21T18:30:00.000Z',
+          message: 'Te invitamos a participar en este evento de networking.',
+        },
+        {
+          id: 'inv-grp-1',
+          type: 'group',
+          targetId: 'grp-ux',
+          targetName: 'UX Lab',
+          senderName: 'Lucía Torres',
+          recipientName: 'Vos',
+          status: 'pending',
+          createdAt: '2026-10-20T15:15:00.000Z',
+          message: 'Quieren que formes parte del grupo de diseño e investigación.',
+        },
+        {
+          id: 'inv-evt-2',
+          type: 'event',
+          targetId: 'evt-2',
+          targetName: 'Workshop de IA',
+          senderName: 'Diego Ruiz',
+          recipientName: 'Vos',
+          status: 'accepted',
+          createdAt: '2026-10-19T10:00:00.000Z',
+          message: 'Confirmaste tu asistencia a este taller.',
+        },
+        {
+          id: 'inv-grp-2',
+          type: 'group',
+          targetId: 'grp-dev',
+          targetName: 'Developers Club',
+          senderName: 'Sofía Vera',
+          recipientName: 'Vos',
+          status: 'declined',
+          createdAt: '2026-10-18T12:00:00.000Z',
+          message: 'No pudiste aceptar la invitación a este grupo.',
+        },
+        {
+          id: 'inv-evt-3',
+          type: 'event',
+          targetId: 'evt-3',
+          targetName: 'Cierre de proyecto',
+          senderName: 'Nicolás Paz',
+          recipientName: 'Vos',
+          status: 'pending',
+          createdAt: '2026-10-16T09:00:00.000Z',
+          message: 'Te han incluido en la reunión final del proyecto.',
+        },
+      ];
+
+      const shell = document.getElementById('invitations-shell');
+      if (!shell) return;
+
+    const loadInvitations = () => {
+      try {
+        const existing = JSON.parse(localStorage.getItem('meetia-invitations') || '[]');
+        return Array.isArray(existing) && existing.length ? existing : defaultInvitations;
+      } catch {
+        return defaultInvitations;
+      }
+    };
+
+    const saveInvitations = (list) => {
+      localStorage.setItem('meetia-invitations', JSON.stringify(list));
+    };
+
+    const formatDate = (value) => {
+      if (!value) return 'Sin fecha';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'Sin fecha';
+      return new Intl.DateTimeFormat('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(date);
+    };
+
+    const render = () => {
+      const invitations = loadInvitations();
+      if (!invitations.length) {
+        shell.innerHTML = `
+          <div class="box">
+            <h3>No tenés invitaciones</h3>
+            <p>Cuando te inviten a un evento o grupo aparecerán aquí.</p>
+          </div>
+        `;
+        return;
+      }
+
+      shell.innerHTML = invitations
+        .map((invitation) => {
+          const statusLabel = invitation.status === 'accepted'
+            ? 'Aceptada'
+            : invitation.status === 'declined'
+              ? 'Rechazada'
+              : 'Pendiente';
+
+          const buttonRow = invitation.status === 'pending'
+            ? `
+              <div class="row">
+                <button class="btn" type="button" data-action="accept" data-id="${invitation.id}">Aceptar</button>
+                <button class="btn out" type="button" data-action="decline" data-id="${invitation.id}">Rechazar</button>
+              </div>
+            `
+            : `
+              <div class="row"><span class="tag secondary">${statusLabel}</span></div>
+            `;
+
+          return `
+            <article class="box invitation-item">
+              <div class="row" style="align-items:flex-start;justify-content:space-between;gap:1rem;">
+                <div>
+                  <span class="tag ${invitation.type === 'event' ? 'primary' : 'secondary'}">${invitation.type === 'event' ? 'Evento' : 'Grupo'}</span>
+                  <h3 style="margin:0.5rem 0 0.25rem;">${invitation.targetName}</h3>
+                  <p style="margin:0; color:#4b5563;">${invitation.message}</p>
+                </div>
+                <small>${formatDate(invitation.createdAt)}</small>
+              </div>
+
+              <div class="row" style="justify-content:space-between; margin-top:0.75rem;">
+                <small>De: ${invitation.senderName}</small>
+                <small>Estado: ${statusLabel}</small>
+              </div>
+
+              ${buttonRow}
+            </article>
+          `;
+        })
+        .join('');
+
+      shell.querySelectorAll('[data-action]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const { action, id } = button.dataset;
+          const invitations = loadInvitations();
+          const target = invitations.find((item) => String(item.id) === String(id));
+          if (!target) return;
+
+          target.status = action === 'accept' ? 'accepted' : 'declined';
+          saveInvitations(invitations);
+          render();
+        });
+      });
+    };
+
+      render();
+    })();
+  </script>
+
+  <style>
+    .stack {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .invitation-item {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .tag.primary {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .tag.secondary {
+      background: #eef2ff;
+      color: #4338ca;
+    }
+  </style>
 </AppLayout>
