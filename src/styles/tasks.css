@@ -1,0 +1,109 @@
+/* Estilos compartidos de tareas (página de evento y página /tasks) */
+.task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.task-header h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.task-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #94a3b8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.task-priority-LOW { border-left-color: #94a3b8; }
+.task-priority-MEDIUM { border-left-color: #3b82f6; }
+.task-priority-HIGH { border-left-color: #f59e0b; }
+.task-priority-URGENT { border-left-color: #dc2626; }
+
+.task-card--closed { opacity: 0.7; }
+.task-card--closed .task-card__title { text-decoration: line-through; }
+
+.task-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.task-card__title { font-size: 1rem; }
+
+.task-card__desc {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.task-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  color: #4b5563;
+  font-size: 0.82rem;
+}
+
+.task-overdue { color: #b91c1c; font-weight: 600; }
+
+.task-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.task-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-card__actions select { max-width: 200px; }
+
+.task-dialog {
+  width: min(540px, 92vw);
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+}
+
+.task-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+
+.task-form { margin: 0; }
+
+.task-form label {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.9rem;
+}
+
+.task-form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 0.75rem;
+}
+
+.task-error {
+  min-height: 1.2em;
+  margin: 0 0 0.5rem;
+  color: #b91c1c;
+}

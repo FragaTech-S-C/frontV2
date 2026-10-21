@@ -1,0 +1,158 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+
+const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '');
+---
+<AppLayout title="Mis tareas">
+  <section id="tasks-page" data-api-base={apiBase}>
+    <div class="row">
+      <label class="grow">Ver
+        <select id="tasks-scope">
+          <option value="mine">Asignadas a mí (pendientes)</option>
+          <option value="upcoming">Próximas (7 días)</option>
+          <option value="all">Todas las que puedo ver</option>
+        </select>
+      </label>
+      <label>Estado
+        <select id="tasks-filter-status">
+          <option value="">Todos</option>
+          <option value="TODO">Por hacer</option>
+          <option value="IN_PROGRESS">En progreso</option>
+          <option value="IN_REVIEW">En revisión</option>
+          <option value="DONE">Hecha</option>
+          <option value="BLOCKED">Bloqueada</option>
+          <option value="CANCELLED">Cancelada</option>
+        </select>
+      </label>
+      <button id="task-open" class="btn" type="button">Nueva tarea</button>
+    </div>
+
+    <p id="tasks-status" class="muted" aria-live="polite"></p>
+    <div id="tasks-list" class="task-list"></div>
+  </section>
+
+  <dialog id="task-dialog" class="task-dialog">
+    <form id="task-form" class="box task-form">
+      <h3>Nueva tarea</h3>
+      <p class="muted">Se crea asignada a vos. Para asociarla a un evento, creala desde la página del evento.</p>
+      <label>Título<input id="task-title" maxlength="200" required /></label>
+      <label>Descripción<textarea id="task-description" rows="3"></textarea></label>
+      <div class="task-form__row">
+        <label>Prioridad
+          <select id="task-priority">
+            <option value="LOW">Baja</option>
+            <option value="MEDIUM" selected>Media</option>
+            <option value="HIGH">Alta</option>
+            <option value="URGENT">Urgente</option>
+          </select>
+        </label>
+        <label>Fecha límite<input id="task-due" type="datetime-local" /></label>
+      </div>
+      <p id="task-error" class="task-error" aria-live="polite"></p>
+      <div class="row">
+        <button class="btn" type="submit">Crear tarea</button>
+        <button class="btn out" type="button" data-close>Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    import { createApi, bindTaskActions, renderTaskCard, sortTasks } from '@/lib/tasks-ui';
+
+    const page = document.getElementById('tasks-page') as HTMLElement;
+    const api = createApi(page.dataset.apiBase ?? '');
+
+    const listEl = document.getElementById('tasks-list') as HTMLElement;
+    const statusEl = document.getElementById('tasks-status') as HTMLElement;
+    const scopeEl = document.getElementById('tasks-scope') as HTMLSelectElement;
+    const statusFilterEl = document.getElementById('tasks-filter-status') as HTMLSelectElement;
+    const openButton = document.getElementById('task-open') as HTMLButtonElement;
+    const dialog = document.getElementById('task-dialog') as HTMLDialogElement;
+    const form = document.getElementById('task-form') as HTMLFormElement;
+    const errorEl = document.getElementById('task-error') as HTMLElement;
+
+    // Cada vista usa un endpoint distinto del backend.
+    const ENDPOINTS: Record<string, string> = {
+      mine: '/tasks/my-tasks',
+      upcoming: '/tasks/upcoming?days=7',
+      all: '/tasks',
+    };
+
+    const setStatus = (message: string, isError = false) => {
+      statusEl.textContent = message;
+      statusEl.style.color = isError ? '#b91c1c' : 'inherit';
+    };
+
+    const loadTasks = async () => {
+      try {
+        const data = await api(ENDPOINTS[scopeEl.value] ?? '/tasks');
+        let tasks: any[] = Array.isArray(data) ? data : [];
+        if (statusFilterEl.value) tasks = tasks.filter((task) => task.status === statusFilterEl.value);
+
+        listEl.innerHTML = tasks.length
+          ? sortTasks(tasks).map((task) => renderTaskCard(task, { showEvent: true })).join('')
+          : '<div class="box"><p class="muted">No hay tareas para mostrar.</p></div>';
+      } catch (error) {
+        listEl.innerHTML = '';
+        setStatus(error instanceof Error ? error.message : 'No se pudieron cargar las tareas.', true);
+      }
+    };
+
+    bindTaskActions(listEl, { api, onChange: loadTasks, setStatus });
+
+    scopeEl.addEventListener('change', () => {
+      setStatus('');
+      loadTasks();
+    });
+    statusFilterEl.addEventListener('change', loadTasks);
+
+    openButton.addEventListener('click', () => {
+      form.reset();
+      errorEl.textContent = '';
+      dialog.showModal();
+    });
+
+    document.querySelectorAll('dialog [data-close]').forEach((button) => {
+      button.addEventListener('click', () => (button.closest('dialog') as HTMLDialogElement).close());
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorEl.textContent = '';
+
+      const title = (document.getElementById('task-title') as HTMLInputElement).value.trim();
+      const description = (document.getElementById('task-description') as HTMLTextAreaElement).value.trim();
+      const priority = (document.getElementById('task-priority') as HTMLSelectElement).value;
+      const due = (document.getElementById('task-due') as HTMLInputElement).value;
+
+      if (!title) {
+        errorEl.textContent = 'El título es obligatorio.';
+        return;
+      }
+
+      const submit = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+      submit.disabled = true;
+
+      try {
+        // El backend exige assigneeId: la tarea queda asignada al usuario actual.
+        const me = await api('/users/me');
+        if (!me?.id) throw new Error('No se pudo determinar el responsable de la tarea.');
+
+        const body: Record<string, unknown> = { title, priority, assigneeId: me.id };
+        if (description) body.description = description;
+        if (due) body.dueDate = new Date(due).toISOString();
+
+        await api('/tasks', { method: 'POST', body: JSON.stringify(body) });
+        dialog.close();
+        setStatus('Tarea creada.');
+        await loadTasks();
+      } catch (error) {
+        errorEl.textContent = error instanceof Error ? error.message : 'No se pudo crear la tarea.';
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    loadTasks();
+  </script>
+</AppLayout>

@@ -102,13 +102,54 @@ const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?
         <h3>Acciones</h3>
         <button id="confirm" class="btn" type="button">Confirmar asistencia</button>
         <button id="leave_event" class="btn out" type="button">Abandonar evento</button>
+        <button id="task-open-side" class="btn out" type="button">Nueva tarea</button>
 
         <div class="ph event-route-box">
           <a href={`/events/${id}/route`} class="event-route-link">Ver ruta</a>
         </div>
       </aside>
     </div>
+
+    <section id="event-tasks" class="box event-tasks" data-api-base={apiBase} data-event-id={id}>
+      <div class="task-header">
+        <h3>Tareas del evento <span id="tasks-count" class="tag secondary">0</span></h3>
+        <button id="task-open" class="btn" type="button">Nueva tarea</button>
+      </div>
+      <p id="tasks-status" class="muted" aria-live="polite"></p>
+      <div id="tasks-list" class="task-list"></div>
+    </section>
   </div>
+
+  <dialog id="task-dialog" class="task-dialog">
+    <form id="task-form" class="box task-form">
+      <h3>Nueva tarea</h3>
+      <label>Título<input id="task-title" maxlength="200" required /></label>
+      <label>Descripción<textarea id="task-description" rows="3"></textarea></label>
+      <div class="task-form__row">
+        <label>Responsable
+          <select id="task-assignee" required></select>
+        </label>
+        <label>Prioridad
+          <select id="task-priority">
+            <option value="LOW">Baja</option>
+            <option value="MEDIUM" selected>Media</option>
+            <option value="HIGH">Alta</option>
+            <option value="URGENT">Urgente</option>
+          </select>
+        </label>
+      </div>
+      <div class="task-form__row">
+        <label>Fecha límite<input id="task-due" type="datetime-local" /></label>
+        <label>Horas estimadas<input id="task-hours" type="number" min="0" step="0.5" /></label>
+      </div>
+      <label>Etiquetas (separadas por coma)<input id="task-tags" placeholder="diseño, urgente" /></label>
+      <p id="task-error" class="task-error" aria-live="polite"></p>
+      <div class="row">
+        <button class="btn" type="submit">Crear tarea</button>
+        <button class="btn out" type="button" data-close>Cancelar</button>
+      </div>
+    </form>
+  </dialog>
 
   <script is:inline define:vars={{ apiBase, eventId: id }}>
     const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
@@ -289,5 +330,144 @@ const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?
     document.getElementById('leave_event')?.addEventListener('click', () => actionRequest(`/events/${currentEventId}/leave`));
 
     loadEvent();
+  </script>
+
+  <script>
+    import { createApi, bindTaskActions, personName, renderTaskCard, sortTasks } from '@/lib/tasks-ui';
+
+    const section = document.getElementById('event-tasks');
+
+    if (section) {
+      const eventId = section.dataset.eventId ?? '';
+      const api = createApi(section.dataset.apiBase ?? '');
+
+      const listEl = document.getElementById('tasks-list') as HTMLElement;
+      const countEl = document.getElementById('tasks-count') as HTMLElement;
+      const statusEl = document.getElementById('tasks-status') as HTMLElement;
+      const dialog = document.getElementById('task-dialog') as HTMLDialogElement;
+      const form = document.getElementById('task-form') as HTMLFormElement;
+      const errorEl = document.getElementById('task-error') as HTMLElement;
+      const assigneeEl = document.getElementById('task-assignee') as HTMLSelectElement;
+
+      const setStatus = (message: string, isError = false) => {
+        statusEl.textContent = message;
+        statusEl.style.color = isError ? '#b91c1c' : 'inherit';
+      };
+
+      const loadTasks = async () => {
+        try {
+          const data = await api(`/tasks?eventId=${encodeURIComponent(eventId)}`);
+          const tasks: any[] = Array.isArray(data) ? data : [];
+          countEl.textContent = String(tasks.length);
+          listEl.innerHTML = tasks.length
+            ? sortTasks(tasks).map((task) => renderTaskCard(task)).join('')
+            : '<p class="muted">Todavía no hay tareas en este evento. Creá la primera con "Nueva tarea".</p>';
+        } catch (error) {
+          listEl.innerHTML = '';
+          setStatus(error instanceof Error ? error.message : 'No se pudieron cargar las tareas.', true);
+        }
+      };
+
+      // Responsables posibles: yo, el creador del evento y los asistentes.
+      let me: any = null;
+      let peopleLoaded = false;
+
+      const loadPeople = async () => {
+        if (peopleLoaded) return;
+        try {
+          me = await api('/users/me');
+        } catch {
+          me = null;
+        }
+
+        let event: any = null;
+        try {
+          event = await api(`/events/${encodeURIComponent(eventId)}`);
+        } catch {
+          event = null;
+        }
+
+        const candidates = [me, event?.creator, event?.assignee, ...(Array.isArray(event?.attendees) ? event.attendees : [])];
+        const seen = new Set<string>();
+        const people = candidates.filter((person) => {
+          if (!person?.id || seen.has(person.id)) return false;
+          seen.add(person.id);
+          return true;
+        });
+
+        assigneeEl.innerHTML = people
+          .map((person) => {
+            const label = personName(person) + (person.id === me?.id ? ' (yo)' : '');
+            return `<option value="${String(person.id).replace(/"/g, '&quot;')}">${label.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] as string)}</option>`;
+          })
+          .join('');
+        if (me?.id) assigneeEl.value = me.id;
+        peopleLoaded = people.length > 0;
+      };
+
+      const openDialog = async () => {
+        form.reset();
+        errorEl.textContent = '';
+        dialog.showModal();
+        await loadPeople();
+        if (me?.id) assigneeEl.value = me.id;
+      };
+
+      document.getElementById('task-open')?.addEventListener('click', openDialog);
+      document.getElementById('task-open-side')?.addEventListener('click', openDialog);
+
+      document.querySelectorAll('dialog [data-close]').forEach((button) => {
+        button.addEventListener('click', () => (button.closest('dialog') as HTMLDialogElement).close());
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorEl.textContent = '';
+
+        const title = (document.getElementById('task-title') as HTMLInputElement).value.trim();
+        const description = (document.getElementById('task-description') as HTMLTextAreaElement).value.trim();
+        const priority = (document.getElementById('task-priority') as HTMLSelectElement).value;
+        const due = (document.getElementById('task-due') as HTMLInputElement).value;
+        const hours = (document.getElementById('task-hours') as HTMLInputElement).value;
+        const tags = (document.getElementById('task-tags') as HTMLInputElement).value
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean);
+        const assigneeId = assigneeEl.value || me?.id;
+
+        if (!title) {
+          errorEl.textContent = 'El título es obligatorio.';
+          return;
+        }
+        if (!assigneeId) {
+          errorEl.textContent = 'No se pudo determinar el responsable de la tarea.';
+          return;
+        }
+
+        // Solo se mandan los campos con valor: el backend rechaza strings vacíos en fechas.
+        const body: Record<string, unknown> = { title, priority, assigneeId, eventId };
+        if (description) body.description = description;
+        if (due) body.dueDate = new Date(due).toISOString();
+        if (hours !== '') body.estimatedHours = Number(hours);
+        if (tags.length) body.tags = tags;
+
+        const submit = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+        submit.disabled = true;
+
+        try {
+          await api('/tasks', { method: 'POST', body: JSON.stringify(body) });
+          dialog.close();
+          setStatus('Tarea creada.');
+          await loadTasks();
+        } catch (error) {
+          errorEl.textContent = error instanceof Error ? error.message : 'No se pudo crear la tarea.';
+        } finally {
+          submit.disabled = false;
+        }
+      });
+
+      bindTaskActions(listEl, { api, onChange: loadTasks, setStatus });
+      loadTasks();
+    }
   </script>
 </AppLayout>
