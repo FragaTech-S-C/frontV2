@@ -27,6 +27,15 @@ import AppLayout from '@/layouts/AppLayout.astro';
       </label>
     </div>
 
+    <div class="box" style="padding:0.75rem; margin:0.75rem 0;">
+      <label>
+        Buscar miembro por nick
+        <input id="member-search" type="search" placeholder="Ej: ana, mate, lu" />
+      </label>
+      <div id="member-results" style="display:grid; gap:0.5rem; margin-top:0.5rem;" /></div>
+      <div id="selected-members" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem;"></div>
+    </div>
+
     <label>Imagen del grupo<input type="file" name="avatar" accept="image/*" /></label>
     <label>Portada del grupo<input type="file" name="coverImage" accept="image/*" /></label>
 
@@ -43,6 +52,10 @@ import AppLayout from '@/layouts/AppLayout.astro';
     const typeField = form?.querySelector('select[name="type"]');
     const institutionalFields = document.getElementById('group-institutional-fields');
     const leaderInput = form?.querySelector('input[name="leader"]') as HTMLInputElement | null;
+    const memberSearch = document.getElementById('member-search');
+    const memberResults = document.getElementById('member-results');
+    const selectedMembersWrap = document.getElementById('selected-members');
+    let selectedMembers: Array<Record<string, any>> = [];
 
     let storedUser: Record<string, any> = {};
     try {
@@ -83,6 +96,48 @@ import AppLayout from '@/layouts/AppLayout.astro';
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') || 'grupo';
 
+    const renderMemberSuggestions = () => {
+      const users: Array<Record<string, any>> = JSON.parse(localStorage.getItem('meetia-users') || '[]');
+      const query = String((memberSearch as HTMLInputElement | null)?.value || '').trim().toLowerCase();
+      const visibleUsers = users.filter((user: Record<string, any>) => {
+        const text = `${user.nickname || ''} ${user.name || ''}`.toLowerCase();
+        return !query || text.includes(query);
+      }).slice(0, 5);
+
+      if (!memberResults) return;
+      memberResults.innerHTML = visibleUsers.length
+        ? visibleUsers.map((user) => `
+            <button type="button" class="btn out" data-member-id="${user.id}" style="justify-content:flex-start; width:100%;">
+              ${user.name} (@${user.nickname || 'sin-nick'})
+            </button>
+          `).join('')
+        : '<span>No se encontraron usuarios.</span>';
+
+      memberResults.querySelectorAll('[data-member-id]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const id = button.getAttribute('data-member-id');
+          const user = users.find((item: Record<string, any>) => String(item.id) === String(id));
+          if (!user) return;
+          if (!selectedMembers.some((item) => String(item.id) === String(user.id))) {
+            selectedMembers = [...selectedMembers, user];
+          }
+          renderSelectedMembers();
+        });
+      });
+    };
+
+    const renderSelectedMembers = () => {
+      if (!selectedMembersWrap) return;
+      selectedMembersWrap.innerHTML = selectedMembers.length
+        ? selectedMembers.map((member) => `
+            <span class="member-pill">${member.name} (@${member.nickname || 'sin-nick'})</span>
+          `).join('')
+        : '<span>Sin invitados aún.</span>';
+    };
+
+    memberSearch?.addEventListener('input', renderMemberSuggestions);
+    renderMemberSuggestions();
+    renderSelectedMembers();
     typeField?.addEventListener('change', toggleInstitutionalFields);
     toggleInstitutionalFields();
 
@@ -135,9 +190,17 @@ import AppLayout from '@/layouts/AppLayout.astro';
         leader_user_id: currentUserId,
         avatar,
         coverImage,
+        members: selectedMembers.map((member) => `${member.name} (@${member.nickname || 'sin-nick'})`),
         createdAt: new Date().toISOString(),
       };
 
+      const notifications = JSON.parse(localStorage.getItem('meetia-notifications') || '[]');
+      const inviteNotifications = selectedMembers.map((member) => ({
+        title: 'Invitación al grupo',
+        text: `${currentUserName} te invitó a unirte a ${name}.`,
+        memberId: member.id,
+      }));
+      localStorage.setItem('meetia-notifications', JSON.stringify([...inviteNotifications, ...notifications].slice(0, 12)));
       localStorage.setItem('meetia-groups', JSON.stringify([...groups, nextGroup]));
       window.location.href = `/groups/${slug}`;
     });

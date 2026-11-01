@@ -1,15 +1,5 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-
-export function getStaticPaths() {
-  return [
-    { params: { id: 'las-girls' } },
-    { params: { id: 'tech-crew' } },
-    { params: { id: 'design-lab' } },
-    { params: { id: '1' } },
-    { params: { id: '2' } },
-  ];
-}
 ---
 
 <AppLayout title="Grupo">
@@ -29,8 +19,8 @@ export function getStaticPaths() {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') || 'grupo';
 
-      const group = groups.find((item) => String(item.slug || slugify(item.name || '')) === String(currentPath))
-        || groups.find((item) => String(item.id) === String(currentPath));
+      const group = groups.find((item: Record<string, any>) => String(item.slug || slugify(item.name || '')) === String(currentPath))
+        || groups.find((item: Record<string, any>) => String(item.id) === String(currentPath));
 
       const defaultMembers = ['Yo', 'Ana', 'Mateo'];
       const defaultEvents = [
@@ -49,9 +39,9 @@ export function getStaticPaths() {
         ? `<img src="${group.avatar}" alt="${group.name || 'Grupo'}" class="group-avatar" />`
         : `<div class="group-avatar letter">${(group?.name || 'G').charAt(0).toUpperCase()}</div>`;
 
-      const memberList = members.map((member) => `<div class="member-pill">${member}</div>`).join('');
+      const memberList = members.map((member: string) => `<div class="member-pill">${member}</div>`).join('');
 
-      const eventList = events.map((event) => {
+      const eventList = events.map((event: Record<string, any>) => {
         const date = event.startDate ? new Date(event.startDate) : null;
         const formattedDate = date && !Number.isNaN(date.getTime())
           ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)

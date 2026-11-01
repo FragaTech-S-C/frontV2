@@ -165,6 +165,24 @@ export const api = {
     return data;
   },
 
+  resetPassword: async (currentPassword: string, newPassword: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/auth/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo restablecer la contraseña.');
+    }
+    return data;
+  },
+
   refresh: async (refreshToken: string) => {
     const baseUrl = getApiBaseUrl();
     const response = await fetch(`${baseUrl}/auth/refresh`, {
@@ -192,6 +210,203 @@ export const api = {
       throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo cerrar sesión.');
     }
     clearStoredAuth();
+    return data;
+  },
+
+  adminLogin: async (credentials: { email: string; password: string }) => {
+    const result = await api.login(credentials);
+    const role = String(result?.user?.role ?? result?.role ?? '').toUpperCase();
+    if (role !== 'ADMIN') {
+      clearStoredAuth();
+      throw new Error('Esta cuenta no tiene permisos de administrador.');
+    }
+    return result;
+  },
+
+  getNotifications: async (userId?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const query = new URLSearchParams();
+    if (userId) query.set('userId', userId);
+    const response = await fetch(`${baseUrl}/notifications${query.toString() ? `?${query.toString()}` : ''}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las notificaciones.');
+    }
+    return data;
+  },
+
+  markNotificationRead: async (id: string, userId?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const search = new URLSearchParams();
+    if (userId) search.set('userId', userId);
+    const response = await fetch(`${baseUrl}/notifications/${id}/read${search.toString() ? `?${search.toString()}` : ''}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo marcar la notificación como leída.');
+    }
+    return data;
+  },
+
+  getFriends: async (userId?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
+    const response = await fetch(`${baseUrl}/friends?userId=${encodeURIComponent(resolvedUserId)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar tus amigos.');
+    }
+    return data;
+  },
+
+  getPendingFriendRequests: async (userId?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
+    const response = await fetch(`${baseUrl}/friends/requests?userId=${encodeURIComponent(resolvedUserId)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las solicitudes de amistad.');
+    }
+    return data;
+  },
+
+  respondToFriendRequest: async (id: string, status: 'accepted' | 'rejected', userId?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
+    const endpoint = status === 'accepted' ? `${id}/accept` : `${id}/reject`;
+    const response = await fetch(`${baseUrl}/friends/${endpoint}?userId=${encodeURIComponent(resolvedUserId)}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo responder la solicitud de amistad.');
+    }
+    return data;
+  },
+
+  searchUsersByEmail: async (email: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/users/search?email=${encodeURIComponent(email.trim())}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo buscar usuarios.');
+    }
+    return data;
+  },
+
+  addFriend: async (userId: string, friendEmail: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/friends/request`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ userId, friendEmail }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo enviar la solicitud.');
+    }
+    return data;
+  },
+
+  removeFriend: async (friendshipId: string, userId: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/friends/${encodeURIComponent(friendshipId)}?userId=${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo eliminar la amistad.');
+    }
+    return data;
+  },
+
+  getInvitations: async (userId?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
+    const response = await fetch(`${baseUrl}/invitations?userId=${encodeURIComponent(resolvedUserId)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las invitaciones.');
+    }
+    return data;
+  },
+
+  respondToInvitation: async (id: string, status: 'accepted' | 'rejected', userId?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
+    const response = await fetch(`${baseUrl}/invitations/${id}/${status}?userId=${encodeURIComponent(resolvedUserId)}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo responder la invitación.');
+    }
+    return data;
+  },
+
+  createReview: async (payload: { eventId: string; userId: string; rating: number; comment: string }) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo guardar la reseña.');
+    }
+    return data;
+  },
+
+  getReviews: async (eventId: string) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/reviews?eventId=${encodeURIComponent(eventId)}`);
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las reseñas.');
+    }
+    return data;
+  },
+
+  createReport: async (payload: { reporterId: string; targetType: 'event' | 'group' | 'user' | 'comment'; targetId: string; subject: string; message: string }) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo enviar el reporte.');
+    }
     return data;
   },
 

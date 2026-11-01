@@ -3,10 +3,18 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
 ---
 <AuthLayout title="Crear cuenta">
   <form id="register-form" class="box" style="border:0;padding:0;background:none">
-    <label>Nombre<input name="firstName" /></label>
-    <label>Apellido<input name="lastName" /></label>
+    <label>Nombre<input name="firstName" required/></label>
+    <label>Apellido<input name="lastName" required/></label>
+    <label>Nickname<input name="nickname" required/></label>
     <label>Email<input type="email" name="email" required /></label>
     <label>Contraseña<input type="password" name="password" required /></label>
+    <label>Rol
+      <select name="role">
+        <option value="NORMAL_USER">Personal</option>
+        <option value="INSTITUTIONAL_USER">Institucional</option>
+        <!-- <option value="ADMIN">Administrador</option> <-- Se asigna manualmente -->
+      </select>
+    </label>
     <button class="btn" type="submit">Registrarme</button>
     <p id="register-status" aria-live="polite"></p>
     <p>¿Ya tenés cuenta? <a href="/login">Iniciá sesión</a></p>
@@ -24,17 +32,21 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
       const payload = {
         firstName: String(formData.get('firstName') ?? '').trim(),
         lastName: String(formData.get('lastName') ?? '').trim(),
+        nickname: String(formData.get('nickname') ?? '').trim(),
         email: String(formData.get('email') ?? '').trim(),
         password: String(formData.get('password') ?? '').trim(),
+        role: String(formData.get('role') ?? 'NORMAL_USER'),
       };
 
       try {
         if (!registerStatus) throw new Error('Missing register');
         registerStatus.textContent = 'Creando cuenta...';
+        console.log("creando user")
         const data = await api.register(payload);
         setStoredAuth(data);
         window.location.href = '/dashboard';
       } catch (error) {
+        console.log(error);
         if (registerStatus) {
           registerStatus.textContent = error instanceof Error ? error.message : 'No se pudo registrar al usuario.';
         }

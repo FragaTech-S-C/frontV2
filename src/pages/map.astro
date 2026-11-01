@@ -1,0 +1,30 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+
+<AppLayout title="Mapa">
+  <section class="box">
+    <h2>Mapa del evento</h2>
+    <div class="map-placeholder">
+      <div class="pin">📍</div>
+      <p>Ubicación sugerida: Palermo, Buenos Aires</p>
+      <small>Vista previa del mapa para rutas y eventos.</small>
+    </div>
+  </section>
+
+  <style>
+    .map-placeholder {
+      min-height: 320px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      background: linear-gradient(135deg, #eef4ff, #e7fff0);
+      color: #1f2937;
+    }
+
+    .pin {
+      font-size: 3rem;
+    }
+  </style>
+</AppLayout>

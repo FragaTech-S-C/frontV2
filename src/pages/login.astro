@@ -27,7 +27,7 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
 
       try {
         const data = await api.login(payload);
-        //localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("accessToken", data.accessToken);
         
         window.location.href = '/dashboard';
       } catch (error) {

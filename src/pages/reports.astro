@@ -1,0 +1,61 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+
+<AppLayout title="Reportes">
+  <section class="box">
+    <h2>Crear reporte</h2>
+    <form id="report-form">
+      <label>
+        Tipo
+        <select name="targetType">
+          <option value="event">Evento</option>
+          <option value="group">Grupo</option>
+          <option value="user">Usuario</option>
+          <option value="comment">Comentario</option>
+        </select>
+      </label>
+      <label>
+        ID del objetivo
+        <input name="targetId" value="demo-target" required />
+      </label>
+      <label>
+        Asunto
+        <input name="subject" placeholder="Violación de normas, spam, etc." required />
+      </label>
+      <label>
+        Detalle
+        <textarea name="message" rows="5" placeholder="Describí el problema..." required></textarea>
+      </label>
+      <button class="btn" type="submit">Enviar reporte</button>
+    </form>
+    <p id="report-status" aria-live="polite"></p>
+  </section>
+
+  <script type="module">
+    import { api } from '@/lib/api';
+
+    const form = document.getElementById('report-form');
+    const status = document.getElementById('report-status');
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const payload = {
+        reporterId: 'local-user',
+        targetType: String(formData.get('targetType') ?? 'event'),
+        targetId: String(formData.get('targetId') ?? 'demo-target'),
+        subject: String(formData.get('subject') ?? '').trim(),
+        message: String(formData.get('message') ?? '').trim(),
+      };
+
+      try {
+        await api.createReport(payload);
+        status.textContent = 'Reporte enviado correctamente.';
+        form.reset();
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : 'No se pudo enviar el reporte.';
+      }
+    });
+  </script>
+</AppLayout>
