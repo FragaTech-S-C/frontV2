@@ -8,56 +8,11 @@ import AppLayout from '@/layouts/AppLayout.astro';
     <div id="osm-map" style="height: 520px; width: 100%; border-radius: 16px; overflow: hidden;"></div>
   </section>
 
-  <script>
-    declare global {
-      interface Window {
-        L?: any;
-      }
-    }
-
-    const mapRoot = document.getElementById('osm-map');
-    if (!mapRoot) {
-      throw new Error('Map container not found');
-    }
-
-    const loadLeaflet = () => new Promise((resolve, reject) => {
-      if (window.L) return resolve(window.L);
-
-      const styleLink = document.createElement('link');
-      styleLink.rel = 'stylesheet';
-      styleLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(styleLink);
-
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => resolve(window.L);
-      script.onerror = () => reject(new Error('No se pudo cargar Leaflet'));
-      document.head.appendChild(script);
-    });
-
-    loadLeaflet().then((Leaflet) => {
-      const L = Leaflet;
-      const map = L.map('osm-map', { zoomControl: true, scrollWheelZoom: true }).setView([-34.6037, -58.3816], 12);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19,
-      }).addTo(map);
-
-      const markers = [
-        { name: 'Palermo', coords: [-34.5847, -58.3973] },
-        { name: 'Puerto Madero', coords: [-34.6091, -58.3620] },
-        { name: 'Recoleta', coords: [-34.5872, -58.3971] },
-      ];
-
-      markers.forEach((item) => {
-        L.marker(item.coords).addTo(map).bindPopup(`<strong>${item.name}</strong><br />Evento sugerido`);
-      });
-    }).catch((error) => {
-      if (mapRoot) {
-        mapRoot.innerHTML = '<div style="display:grid;place-items:center;height:100%;color:#7a2e2e;">No se pudo cargar el mapa de OpenStreetMap.</div>';
-      }
-      console.error(error);
-    });
-  </script>
+  <iframe
+    id="osm-map"
+    title="Mapa de eventos en Buenos Aires"
+    src="https://www.openstreetmap.org/export/embed.html?bbox=-58.5200%2C-34.7000%2C-58.2600%2C-34.4800&layer=mapnik&marker=-34.6037%2C-58.3816"
+    style="height: 520px; width: 100%; border: 0; border-radius: 16px;"
+    loading="lazy"
+  ></iframe>
 </AppLayout>

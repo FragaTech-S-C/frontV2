@@ -117,9 +117,6 @@ const provinceOptions = [
       <label class="grow">Institución asociada
         <select name="institutionId">
           <option value="">Seleccioná una institución</option>
-          <option value="inst-1">Universidad del Este</option>
-          <option value="inst-2">Fundación Innovar</option>
-          <option value="inst-3">Museo de Arte</option>
         </select>
       </label>
       <label class="grow">Máx. asistentes<input type="number" name="maxAttendees" min="0" value="0" /></label>
@@ -152,10 +149,41 @@ const provinceOptions = [
   const visibilityField = form?.querySelector('select[name="visibility"]') as HTMLSelectElement | null;
 
   const institutionalFields = document.getElementById('institutional-event-fields');
+  const institutionSelect = form?.querySelector('select[name="institutionId"]') as HTMLSelectElement | null;
   const priceFieldWrapper = document.getElementById('price-field-wrapper');
   const isFreeField = form?.querySelector('select[name="isFree"]') as HTMLSelectElement | null;
   const startDateField = form?.querySelector('input[name="startDate"]') as HTMLInputElement | null;
   const endDateField = form?.querySelector('input[name="endDate"]') as HTMLInputElement | null;
+
+  const loadInstitutions = async () => {
+    if (!institutionSelect) return;
+
+    try {
+      const institutions = await api.getInstitutions();
+      const previousValue = institutionSelect.value;
+      institutionSelect.innerHTML = '<option value="">Seleccioná una institución</option>';
+
+      if (Array.isArray(institutions) && institutions.length) {
+        institutions.forEach((institution: Record<string, any>) => {
+          const option = document.createElement('option');
+          option.value = String(institution.id ?? '');
+          option.textContent = institution.name ?? 'Institución';
+          institutionSelect.appendChild(option);
+        });
+      } else {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No hay instituciones disponibles';
+        institutionSelect.appendChild(option);
+      }
+
+      if (previousValue && Array.from(institutionSelect.options).some((option) => option.value === previousValue)) {
+        institutionSelect.value = previousValue;
+      }
+    } catch (error) {
+      institutionSelect.innerHTML = '<option value="">No se pudieron cargar las instituciones</option>';
+    }
+  };
 
   const minDateValue = new Date();
   minDateValue.setSeconds(0, 0);
@@ -187,6 +215,7 @@ const provinceOptions = [
 
   visibilityField?.addEventListener('change', updateInstitutionalVisibility);
   isFreeField?.addEventListener('change', updatePriceVisibility);
+  void loadInstitutions();
   updateInstitutionalVisibility();
   updatePriceVisibility();
 

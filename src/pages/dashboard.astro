@@ -46,6 +46,53 @@ type EventCardProps = {
     ))}
   </div>
 
+  <section id="admin-institutions-section" class="box" style="margin-top:1.5rem;display:none;">
+    <h2>Administración de instituciones</h2>
+    <form id="admin-institution-form">
+      <div class="grid">
+        <label>
+          Nombre
+          <input name="name" type="text" placeholder="Nombre de la institución" required />
+        </label>
+        <label>
+          Email
+          <input name="email" type="email" placeholder="contacto@institucion.com" />
+        </label>
+        <label>
+          Sitio web
+          <input name="website" type="url" placeholder="https://example.com" />
+        </label>
+        <label>
+          Teléfono
+          <input name="phone" type="tel" placeholder="+54 11 1234-5678" />
+        </label>
+        <label>
+          Ciudad
+          <input name="city" type="text" placeholder="Buenos Aires" />
+        </label>
+        <label>
+          País
+          <input name="country" type="text" placeholder="Argentina" />
+        </label>
+      </div>
+      <label>
+        Dirección
+        <input name="address" type="text" placeholder="Calle, número, barrio" />
+      </label>
+      <label>
+        Descripción
+        <textarea name="description" rows="3" placeholder="Descripción de la institución"></textarea>
+      </label>
+      <button class="btn" type="submit">Agregar institución</button>
+      <p id="admin-institution-status" aria-live="polite"></p>
+    </form>
+
+    <div style="margin-top:1rem;">
+      <h3>Instituciones</h3>
+      <div id="admin-institutions-list" class="grid"></div>
+    </div>
+  </section>
+
   <script is:inline define:vars={{ apiBase }}>
     const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
     const getStoredToken = () => localStorage.getItem('meetia-access-token') ?? localStorage.getItem('accessToken') ?? localStorage.getItem('access_token') ?? '';
@@ -203,5 +250,92 @@ type EventCardProps = {
     }
 
     loadEvents();
+  </script>
+
+  <script type="module">
+    import { api } from '@/lib/api';
+
+    const auth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
+    const role = String(auth?.user?.role ?? auth?.role ?? '').toUpperCase();
+    const adminSection = document.getElementById('admin-institutions-section');
+    const institutionForm = document.getElementById('admin-institution-form');
+    const institutionStatus = document.getElementById('admin-institution-status');
+    const institutionsList = document.getElementById('admin-institutions-list');
+
+    const renderInstitutions = (institutions) => {
+      if (!institutionsList) return;
+      const items = Array.isArray(institutions) ? institutions : [];
+
+      if (!items.length) {
+        institutionsList.innerHTML = '<p>No hay instituciones creadas todavía.</p>';
+        return;
+      }
+
+      institutionsList.innerHTML = items.map((institution) => {
+        const name = institution?.name || 'Institución sin nombre';
+        const city = institution?.city ? String(institution.city) : '';
+        const country = institution?.country ? String(institution.country) : '';
+        const location = [city, country].filter(Boolean).join(', ');
+        const website = institution?.website ? String(institution.website) : '';
+
+        return `
+          <article class="box" style="padding:1rem;">
+            <h4>${name}</h4>
+            <p>${location || 'Sin ubicación'}</p>
+            ${website ? `<a href="${website}" target="_blank" rel="noreferrer">Sitio web</a>` : '<span>Sin sitio web</span>'}
+          </article>
+        `;
+      }).join('');
+    };
+
+    const loadInstitutions = async () => {
+      if (!adminSection || role !== 'ADMIN') return;
+
+      try {
+        const institutions = await api.getInstitutions();
+        renderInstitutions(institutions);
+      } catch (error) {
+        if (institutionsList) {
+          institutionsList.innerHTML = `<p>No se pudieron cargar las instituciones.</p>`;
+        }
+      }
+    };
+
+    if (role === 'ADMIN' && adminSection) {
+      adminSection.style.display = 'block';
+      loadInstitutions();
+    }
+
+    institutionForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (institutionStatus) institutionStatus.textContent = 'Creando institución...';
+
+      try {
+        const formData = new FormData(institutionForm);
+        const payload = {
+          name: String(formData.get('name') ?? '').trim(),
+          email: String(formData.get('email') ?? '').trim() || undefined,
+          website: String(formData.get('website') ?? '').trim() || undefined,
+          phone: String(formData.get('phone') ?? '').trim() || undefined,
+          address: String(formData.get('address') ?? '').trim() || undefined,
+          city: String(formData.get('city') ?? '').trim() || undefined,
+          country: String(formData.get('country') ?? '').trim() || undefined,
+          description: String(formData.get('description') ?? '').trim() || undefined,
+        };
+
+        if (!payload.name) {
+          throw new Error('El nombre de la institución es obligatorio.');
+        }
+
+        await api.createInstitution(payload);
+        institutionForm.reset();
+        if (institutionStatus) institutionStatus.textContent = 'Institución creada correctamente.';
+        await loadInstitutions();
+      } catch (error) {
+        if (institutionStatus) {
+          institutionStatus.textContent = error instanceof Error ? error.message : 'No se pudo crear la institución.';
+        }
+      }
+    });
   </script>
 </AppLayout>

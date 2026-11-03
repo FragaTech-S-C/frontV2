@@ -10,7 +10,13 @@ const routeLng = routeLngParam !== null && routeLngParam !== '' ? Number(routeLn
 <AppLayout title="Ruta del evento">
   <div class="box">
     <h2>Ubicación del evento</h2>
-    <div id="route-map" style="height: 480px; width: 100%; border-radius: 16px; overflow: hidden;"></div>
+    <iframe
+      id="route-map"
+      title="Mapa de la ubicación del evento"
+      src={`https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(String(-58.5200))}%2C${encodeURIComponent(String(-34.7000))}%2C${encodeURIComponent(String(-58.2600))}%2C${encodeURIComponent(String(-34.4800))}&layer=mapnik&marker=${encodeURIComponent(String(Number.isFinite(routeLat) ? routeLat : -34.6037))}%2C${encodeURIComponent(String(Number.isFinite(routeLng) ? routeLng : -58.3816))}`}
+      style="height: 480px; width: 100%; border: 0; border-radius: 16px;"
+      loading="lazy"
+    ></iframe>
     <p id="route-status" aria-live="polite"></p>
     <a class="btn out" href={rawEventId ? `/events/${encodeURIComponent(rawEventId)}` : '/dashboard'}>Volver al evento</a>
   </div>
@@ -25,32 +31,13 @@ const routeLng = routeLngParam !== null && routeLngParam !== '' ? Number(routeLn
       status.style.color = isError ? '#b42318' : '#1d6f42';
     };
 
-    const mapRoot = document.getElementById('route-map');
-    if (!mapRoot) throw new Error('Map container missing');
-
-    const loadLeaflet = () => new Promise((resolve, reject) => {
-      if (window.L) return resolve(window.L);
-
-      const styleLink = document.createElement('link');
-      styleLink.rel = 'stylesheet';
-      styleLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(styleLink);
-
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => resolve(window.L);
-      script.onerror = () => reject(new Error('No se pudo cargar OpenStreetMap.'));
-      document.head.appendChild(script);
-    });
-
     const eventKey = eventId || new URLSearchParams(window.location.search).get('id') || '';
     if (!eventKey) {
       setStatus('No se recibió el identificador del evento.', true);
       throw new Error('Missing event id');
     }
 
-    loadLeaflet()
-      .then(() => api.getEventsById(eventKey))
+    api.getEventsById(eventKey)
       .then((event) => {
         const payload = event?.event ?? event;
         const lat = Number.isFinite(initialLat) ? initialLat : Number(payload?.latitude ?? payload?.location?.lat ?? payload?.location?.latitude ?? -34.6037);
@@ -59,20 +46,17 @@ const routeLng = routeLngParam !== null && routeLngParam !== '' ? Number(routeLn
         const locationText = [payload?.venueName, payload?.location, payload?.address, payload?.city, payload?.country].filter(Boolean).join(' · ') || 'Ubicación no definida';
 
         setStatus(locationText);
-        const map = window.L.map('route-map').setView([lat, lng], 14);
-        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors',
-          maxZoom: 19,
-        }).addTo(map);
 
-        const marker = window.L.marker([lat, lng]).addTo(map).bindPopup(`<strong>${title}</strong><br />${locationText}`);
-        map.fitBounds(marker.getLatLng().toBounds(50), { padding: [20, 20] });
+        const mapFrame = document.getElementById('route-map');
+        if (!mapFrame) return;
+        const bbox = [-58.52, -34.7, -58.26, -34.48];
+        const markerLat = Number.isFinite(lat) ? lat : -34.6037;
+        const markerLng = Number.isFinite(lng) ? lng : -58.3816;
+        mapFrame.src = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(String(bbox[0]))}%2C${encodeURIComponent(String(bbox[1]))}%2C${encodeURIComponent(String(bbox[2]))}%2C${encodeURIComponent(String(bbox[3]))}&layer=mapnik&marker=${encodeURIComponent(String(markerLat))}%2C${encodeURIComponent(String(markerLng))}`;
+        mapFrame.title = `${title} - ${locationText}`;
       })
       .catch((error) => {
         setStatus(error instanceof Error ? error.message : 'No se pudo cargar la ubicación del evento.', true);
-        if (mapRoot) {
-          mapRoot.innerHTML = '<div style="display:grid;place-items:center;height:100%;color:#7a2e2e;">No se pudo cargar la ubicación del evento.</div>';
-        }
       });
   </script>
 </AppLayout>

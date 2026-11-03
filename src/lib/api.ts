@@ -325,6 +325,37 @@ export const api = {
     return data;
   },
 
+  getInstitutions: async () => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/institutions`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las instituciones.');
+    }
+    return data;
+  },
+
+  createInstitution: async (payload: Record<string, unknown>) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/institutions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo crear la institución.');
+    }
+    return data;
+  },
+
   getGroups: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
@@ -427,6 +458,21 @@ export const api = {
     const data = await jsonOrText(response);
     if (!response.ok) {
       throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo eliminar la amistad.');
+    }
+    return data;
+  },
+
+  addMemberToGroup: async (groupId: string, userId: string) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo agregar a la persona al grupo.');
     }
     return data;
   },

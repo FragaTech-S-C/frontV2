@@ -20,9 +20,6 @@ import AppLayout from '@/layouts/AppLayout.astro';
       <label>Institución asociada
         <select name="institutionId">
           <option value="">Seleccioná una institución</option>
-          <option value="inst-1">Universidad del Este</option>
-          <option value="inst-2">Fundación Innovar</option>
-          <option value="inst-3">Museo de Arte</option>
         </select>
       </label>
     </div>
@@ -36,9 +33,6 @@ import AppLayout from '@/layouts/AppLayout.astro';
       <div id="selected-members" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem;"></div>
     </div>
 
-    <label>Imagen del grupo<input type="file" name="avatar" accept="image/*" /></label>
-    <label>Portada del grupo<input type="file" name="coverImage" accept="image/*" /></label>
-
     <div class="row">
       <button class="btn" type="submit">Crear grupo</button>
       <a class="btn out" href="/groups">Cancelar</a>
@@ -51,13 +45,44 @@ import AppLayout from '@/layouts/AppLayout.astro';
 
     const form = document.getElementById('group-form') as HTMLFormElement;
     const statusBox = document.getElementById('group-status');
-    const typeField = form?.querySelector('select[name="type"]');
+    const typeField = form?.querySelector('select[name="type"]') as HTMLSelectElement | null;
     const institutionalFields = document.getElementById('group-institutional-fields');
+    const institutionSelect = form?.querySelector('select[name="institutionId"]') as HTMLSelectElement | null;
     const leaderInput = form?.querySelector('input[name="leader"]') as HTMLInputElement | null;
-    const memberSearch = document.getElementById('member-search');
-    const memberResults = document.getElementById('member-results');
+    const memberSearch = document.getElementById('member-search') as HTMLInputElement | null;
+    const memberResults = document.getElementById('member-results') as HTMLDivElement | null;
     const selectedMembersWrap = document.getElementById('selected-members');
     let selectedMembers: Array<Record<string, any>> = [];
+
+    const loadInstitutions = async () => {
+      if (!institutionSelect) return;
+
+      try {
+        const institutions = await api.getInstitutions();
+        const previousValue = institutionSelect.value;
+        institutionSelect.innerHTML = '<option value="">Seleccioná una institución</option>';
+
+        if (Array.isArray(institutions) && institutions.length) {
+          institutions.forEach((institution: Record<string, any>) => {
+            const option = document.createElement('option');
+            option.value = String(institution.id ?? '');
+            option.textContent = institution.name ?? 'Institución';
+            institutionSelect.appendChild(option);
+          });
+        } else {
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = 'No hay instituciones disponibles';
+          institutionSelect.appendChild(option);
+        }
+
+        if (previousValue && Array.from(institutionSelect.options).some((option) => option.value === previousValue)) {
+          institutionSelect.value = previousValue;
+        }
+      } catch (error) {
+        institutionSelect.innerHTML = '<option value="">No se pudieron cargar las instituciones</option>';
+      }
+    };
 
     let storedUser: Record<string, any> = {};
     try {
@@ -74,20 +99,15 @@ import AppLayout from '@/layouts/AppLayout.astro';
     }
 
     const toggleInstitutionalFields = () => {
-      const isInstitutional = String(typeField ?? 'personal') === 'institutional';
+      const isInstitutional = String(typeField?.value ?? 'personal') === 'institutional';
       if (institutionalFields) {
         institutionalFields.style.display = isInstitutional ? 'block' : 'none';
       }
-    };
 
-    const readFile = (file: File) => {
-      if (!file) return Promise.resolve(undefined);
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-        reader.readAsDataURL(file);
-      });
+      const institutionSelect = form?.querySelector('select[name="institutionId"]') as HTMLSelectElement | null;
+      if (!isInstitutional && institutionSelect) {
+        institutionSelect.value = '';
+      }
     };
 
     const slugify = (value: string) =>
@@ -180,6 +200,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
     });
     renderSelectedMembers();
     typeField?.addEventListener('change', toggleInstitutionalFields);
+    void loadInstitutions();
     toggleInstitutionalFields();
 
     form?.addEventListener('submit', async (event) => {
@@ -189,9 +210,6 @@ import AppLayout from '@/layouts/AppLayout.astro';
       const name = String(formData.get('name') ?? '').trim();
       const description = String(formData.get('description') ?? '').trim();
       const institutionId = String(formData.get('institutionId') ?? '').trim();
-      const avatarFile = formData.get('avatar');
-      const coverImageFile = formData.get('coverImage');
-
       if (!name) {
         if (statusBox) {
           statusBox.textContent = 'El nombre del grupo es obligatorio.';
@@ -211,15 +229,10 @@ import AppLayout from '@/layouts/AppLayout.astro';
           statusBox.textContent = 'Creando grupo...';
         }
 
-        const avatar = avatarFile && avatarFile instanceof File ? await readFile(avatarFile) : undefined;
-        const coverImage = coverImageFile && coverImageFile instanceof File ? await readFile(coverImageFile) : undefined;
-
         const payload = {
           name,
-          description: description || undefined,
-          institutionId: type === 'institutional' ? institutionId : undefined,
-          avatar: avatar || undefined,
-          coverImage: coverImage || undefined,
+          ...(description ? { description } : {}),
+          ...(type === 'institutional' && institutionId ? { institutionId } : {}),
           isPrivate: false,
           requiresApproval: false,
         };
