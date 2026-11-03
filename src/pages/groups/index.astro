@@ -1,57 +1,73 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
 ---
-<AppLayout title="Mis grupos">
+<AppLayout title="Grupos">
   <div class="row">
-    <a class="btn" href="/groups/new">Nuevo grupo</a>
-    <a class="btn out" href="/dashboard">Volver</a>
+    <a class="btn" href="/groups/new">+ Nuevo grupo</a>
   </div>
-  <div id="groups-list" class="grid"></div>
 
-  <script>
-    (() => {
-      const list = document.getElementById('groups-list');
-      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
-      const slugify = (value = '') => String(value)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'grupo';
-
-      if (!list) return;
-
-      if (!groups.length) {
-        list.innerHTML = `
-          <div class="box">
-            <h3>Sin grupos todavía</h3>
-            <p>Crea tu primer espacio personal o institucional para comenzar.</p>
-          </div>
-        `;
-        return;
-      }
-
-      list.innerHTML = groups
-        .map((group: any) => {
-          const isInstitutional = group.type === 'institutional';
-          const label = isInstitutional ? 'Institucional' : 'Personal';
-          const slug = group.slug || slugify(group.name || 'grupo');
-          const avatarMarkup = group.avatar
-            ? `<img src="${group.avatar}" alt="${group.name}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;" />`
-            : `<div style="display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:#e6e7ff;color:#293a70;font-weight:700;">${group.name?.charAt(0) ?? 'G'}</div>`;
-
-          return `
-            <a class="box" href="/groups/${slug}" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;">
-              ${avatarMarkup}
-              <div>
-                <h3 style="margin:0 0 4px;">${group.name}</h3>
-                <p style="margin:0;">${label} · Líder: ${group.leader || 'Yo'}</p>
-                <small>${group.institutionId ? 'Institución asociada' : 'Grupo personal'}</small>
-              </div>
-            </a>
-          `;
-        })
-        .join('');
-    })();
-  </script>
+  <div id="groups-status" class="box" style="display:none;"></div>
+  <div id="groups-grid" class="grid"></div>
+  <p id="groups-empty" class="muted" style="display:none;">Todavía no sos parte de ningún grupo.</p>
 </AppLayout>
+
+<script>
+  import { api } from '@/lib/api';
+
+  const statusEl = document.getElementById('groups-status');
+  const grid = document.getElementById('groups-grid');
+  const empty = document.getElementById('groups-empty');
+
+  const show = (msg) => { if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = msg; } };
+  const hide = () => { if (statusEl) statusEl.style.display = 'none'; };
+
+  const renderGroups = (items) => {
+    if (!grid || !empty) return;
+    grid.innerHTML = '';
+
+    if (!items?.length) {
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    items.forEach((group) => {
+      const card = document.createElement('a');
+      card.href = `/groups/${group.id}`;
+      card.className = 'box';
+      card.style.cssText = 'display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;';
+
+      const avatarHTML = group.avatar
+        ? `<img src="${group.avatar}" alt="${group.name}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;" />`
+        : `<div style="flex-shrink:0;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#e6e7ff;color:#293a70;font-weight:700;font-size:1.2rem;">${(group.name ?? 'G').charAt(0).toUpperCase()}</div>`;
+
+      const memberCount = group._count?.members ?? group.memberCount ?? '';
+      const memberLabel = memberCount !== '' ? `${memberCount} miembros` : '';
+      const typeLabel = group.isPrivate ? 'Privado' : 'Público';
+
+      card.innerHTML = `
+        ${avatarHTML}
+        <div>
+          <h3 style="margin:0 0 3px;">${group.name ?? 'Grupo'}</h3>
+          <p style="margin:0;font-size:0.85rem;color:#4b5563;">${typeLabel}${memberLabel ? ' · ' + memberLabel : ''}</p>
+          ${group.description ? `<p style="margin:4px 0 0;font-size:0.82rem;color:#6b7280;">${group.description.slice(0, 80)}${group.description.length > 80 ? '…' : ''}</p>` : ''}
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  };
+
+  const load = async () => {
+    show('Cargando grupos...');
+    try {
+      const data = await api.getGroups();
+      hide();
+      const items = Array.isArray(data) ? data : (data?.groups ?? data?.data ?? []);
+      renderGroups(items);
+    } catch (e) {
+      show(e instanceof Error ? e.message : 'No se pudieron cargar los grupos.');
+    }
+  };
+
+  load();
+</script>

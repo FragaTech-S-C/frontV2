@@ -1,0 +1,165 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+export function getStaticPaths() { return [{ params: { id: '_' } }]; }
+const { id } = Astro.params;
+
+const categoryOptions = [
+  { value: 'CONFERENCE', label: 'Conferencia' },
+  { value: 'WORKSHOP', label: 'Taller' },
+  { value: 'MEETING', label: 'Reunión' },
+  { value: 'SOCIAL', label: 'Social' },
+  { value: 'SPORTS', label: 'Deportivo' },
+  { value: 'CULTURAL', label: 'Cultural' },
+  { value: 'EDUCATIONAL', label: 'Educativo' },
+  { value: 'NETWORKING', label: 'Networking' },
+  { value: 'OTHER', label: 'Otros' },
+];
+
+const visibilityOptions = [
+  { value: 'PUBLIC', label: 'Público' },
+  { value: 'INSTITUTION', label: 'Institución' },
+  { value: 'GROUP', label: 'Grupo' },
+  { value: 'PRIVATE', label: 'Privado' },
+];
+---
+<AppLayout title="Editar evento">
+  <div id="edit-status" class="box" style="display:none;"></div>
+  <form id="edit-form" class="box" style="display:none;">
+    <label>Título<input name="title" required /></label>
+    <label>Descripción<textarea name="description" rows="4"></textarea></label>
+    <div class="row">
+      <label class="grow">Inicio<input type="datetime-local" name="startDate" required /></label>
+      <label class="grow">Fin<input type="datetime-local" name="endDate" /></label>
+    </div>
+    <div class="row">
+      <label class="grow">Categoría
+        <select name="category">
+          {categoryOptions.map(({ value, label }) => (
+            <option value={value}>{label}</option>
+          ))}
+        </select>
+      </label>
+      <label class="grow">Visibilidad
+        <select name="visibility">
+          {visibilityOptions.map(({ value, label }) => (
+            <option value={value}>{label}</option>
+          ))}
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="grow">Lugar<input name="location" /></label>
+      <label class="grow">Ciudad<input name="city" /></label>
+    </div>
+    <label>URL de imagen de portada<input type="url" name="coverImage" placeholder="https://..." /></label>
+    <label>
+      ¿Es gratis?
+      <select name="isFree">
+        <option value="true">Sí</option>
+        <option value="false">No</option>
+      </select>
+    </label>
+    <label id="price-wrap" style="display:none;">Precio<input type="number" name="price" min="0" step="0.01" /></label>
+    <div id="form-status" class="muted" aria-live="polite" style="display:none;"></div>
+    <div class="row">
+      <button class="btn" type="submit">Guardar cambios</button>
+      <a class="btn out" id="cancel-link" href="#">Cancelar</a>
+    </div>
+  </form>
+</AppLayout>
+
+<script>
+  import { api } from '@/lib/api';
+  const eventId = window.location.pathname.split('/').filter(Boolean)[1];
+
+  const statusEl = document.getElementById('edit-status');
+  const form = document.getElementById('edit-form');
+  const formStatus = document.getElementById('form-status');
+  const cancelLink = document.getElementById('cancel-link');
+  const priceWrap = document.getElementById('price-wrap');
+  const isFreeField = form?.querySelector('select[name="isFree"]');
+
+  if (cancelLink) cancelLink.href = `/events/${eventId}`;
+
+  const show = (msg, isForm = false) => {
+    const el = isForm ? formStatus : statusEl;
+    if (el) { el.style.display = 'block'; el.textContent = msg; }
+  };
+
+  const toDatetimeLocal = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const togglePrice = () => {
+    if (!priceWrap || !isFreeField) return;
+    priceWrap.style.display = isFreeField.value === 'false' ? 'block' : 'none';
+  };
+
+  isFreeField?.addEventListener('change', togglePrice);
+
+  const loadEvent = async () => {
+    show('Cargando datos del evento...');
+    try {
+      const event = await api.getEventById(eventId);
+      if (statusEl) statusEl.style.display = 'none';
+      if (form) form.style.display = 'flex';
+
+      const setVal = (name, val) => {
+        const el = form.querySelector(`[name="${name}"]`);
+        if (el) el.value = val ?? '';
+      };
+
+      setVal('title', event.title);
+      setVal('description', event.description);
+      setVal('startDate', toDatetimeLocal(event.startDate));
+      setVal('endDate', toDatetimeLocal(event.endDate));
+      setVal('category', event.category);
+      setVal('visibility', event.visibility);
+      setVal('location', event.location);
+      setVal('city', event.city);
+      setVal('coverImage', event.coverImage);
+      setVal('isFree', event.isFree ? 'true' : 'false');
+      setVal('price', event.price);
+      togglePrice();
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'No se pudo cargar el evento.');
+    }
+  };
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    show('Guardando...', true);
+    const fd = new FormData(form);
+    const isFree = fd.get('isFree') === 'true';
+    const startRaw = fd.get('startDate');
+    const endRaw = fd.get('endDate');
+
+    const payload = {
+      title: String(fd.get('title') ?? '').trim(),
+      description: String(fd.get('description') ?? '').trim() || undefined,
+      category: fd.get('category'),
+      visibility: fd.get('visibility'),
+      startDate: startRaw ? new Date(startRaw).toISOString() : undefined,
+      endDate: endRaw ? new Date(endRaw).toISOString() : undefined,
+      location: String(fd.get('location') ?? '').trim() || undefined,
+      city: String(fd.get('city') ?? '').trim() || undefined,
+      coverImage: String(fd.get('coverImage') ?? '').trim() || undefined,
+      isFree,
+      price: isFree ? undefined : Number(fd.get('price')) || undefined,
+    };
+
+    try {
+      await api.updateEvent(eventId, payload);
+      show('Evento actualizado correctamente.', true);
+      setTimeout(() => { window.location.href = `/events/${eventId}`; }, 1200);
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'No se pudo actualizar.', true);
+    }
+  });
+
+  loadEvent();
+</script>
