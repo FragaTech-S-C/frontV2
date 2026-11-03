@@ -1,69 +1,386 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-import { type APIContext } from 'astro';
-
 export const prerender = false;
-export function getStaticPaths() { return [{ params: { id: '1' } }]; }
-const { id } = Astro.params;
+const routeKey = Astro.params.id ?? 'evento';
 ---
-<AppLayout title="Nombre del evento">
-  <p>Fecha · Lugar · Categoría · Organizador</p>
-  <div class="grid">
-    <section class="box">
-      <h3>Descripción y notas</h3>
-      <p>Archivos, documentos y ubicaciones del evento.</p>
-      <h3>Asistentes</h3>
-      <div class="ph">Avatares</div>
-    </section>
-    <aside class="box">
-      <a href={`/events/${id}/route`} class="ph" style="text-decoration:none">Mini mapa — ver ruta</a>
-      <button class="btn" id="confirm" type="button">Confirmar asistencia</button>
-      <button class="btn out" id="invite" type="button">Invitar</button>
-      <button class="btn out" id="leave_event" type="button">Abandonar evento</button>
-    </aside>
-  </div>
-  <div class="row">
-    <a class="btn out" href={`/events/${id}/edit`}>Editar evento</a>
-    <button class="btn out" type="button">Dejar review</button>
-    <button class="btn out" type="button">Denunciar</button>
+<AppLayout title="Evento">
+  <div id="event-detail-shell" class="box">
+    <p>Cargando evento...</p>
   </div>
 
-  <script type="module">
-    import { api } from '@/lib/api';
+  <script>
+    import { api } from "@/lib/api";
 
-    const eventId = '${id}';
-    const confirmButton = document.getElementById('confirm');
-    const inviteButton = document.getElementById('invite');
-    const leaveButton = document.getElementById('leave_event');
+    type InviteOption = {
+      id?: string;
+      kind: 'friend' | 'group' | 'member';
+      name: string;
+      email: string;
+      nickname: string;
+      groupName: string;
+      groupId: string;
+    };
 
-    confirmButton?.addEventListener('click', async () => {
-      try {
-        await api.confirmAssistance(eventId);
-        confirmButton.textContent = 'Asistencia confirmada';
-      } catch (error) {
-        alert(error instanceof Error ? error.message : 'No se pudo confirmar la asistencia.');
-      }
-    });
+    const shell = document.getElementById('event-detail-shell');
+    const searchParams = new URLSearchParams(window.location.search);
+    const routeKey = String(searchParams.get('id') || window.location.pathname.split('/').filter(Boolean).pop() || 'evento');
 
-    inviteButton?.addEventListener('click', async () => {
-      try {
-        const result = await api.inviteToEvent(eventId);
-        inviteButton.textContent = result?.message ? 'Invitación enviada' : 'Invitar';
-        if (result?.message) {
-          alert(result.message);
+    const formatDate = (value: string | number | Date | null | undefined) => {
+      if (!value) return 'Sin fecha';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'Sin fecha';
+      return new Intl.DateTimeFormat('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(date);
+    };
+
+    const renderEvent = (event: Record<string, any>) => {
+      if (!shell) return;
+
+      const eventId = event.id ?? routeKey;
+      const title = event.title || 'Evento sin título';
+      const description = event.description || 'Sin descripción disponible para este evento.';
+      const locationParts = [event.location, event.city, event.country, event.address].filter(Boolean);
+      const organizer = event.group?.name
+        ? event.group.name
+        : event.creator
+          ? [event.creator.firstName, event.creator.lastName].filter(Boolean).join(' ') || event.creator.nickname || 'Organizador'
+          : 'Organizador';
+      const attendees = Array.isArray(event.attendees) ? event.attendees : [];
+      const lat = Number(event.latitude ?? event.location?.lat ?? event.location?.latitude ?? -34.6037);
+      const lng = Number(event.longitude ?? event.location?.lng ?? event.location?.longitude ?? -58.3816);
+      const safeLat = Number.isFinite(lat) ? lat : -34.6037;
+      const safeLng = Number.isFinite(lng) ? lng : -58.3816;
+      const routePath = `/events/${encodeURIComponent(String(eventId))}/route?id=${encodeURIComponent(String(eventId))}&lat=${encodeURIComponent(String(safeLat))}&lng=${encodeURIComponent(String(safeLng))}`;
+
+      shell.innerHTML = `
+        <div class="event-header">
+          <div>
+            <p class="eyebrow">${event.category || 'Evento'}</p>
+            <h2>${title}</h2>
+            <p>${formatDate(event.startDate)} · ${locationParts.join(' - ') || 'Sin ubicación'} · ${organizer}</p>
+          </div>
+        </div>
+
+        <div class="grid">
+          <section class="box">
+            <h3>Descripción y notas</h3>
+            <p>${description}</p>
+            <h3>Asistentes</h3>
+            <div class="avatar-row">
+              ${attendees.length ? attendees.map((person: Record<string, any>) => {
+                const personName = [person.firstName, person.lastName].filter(Boolean).join(' ') || person.nickname || 'Usuario';
+                return `<span class="avatar-pill">${personName}</span>`;
+              }).join('') : '<span class="avatar-pill">Sin asistentes aún</span>'}
+            </div>
+          </section>
+          <aside class="box actions-box">
+            <a href="${routePath}" class="ph" style="text-decoration:none;display:block;">Mini mapa — ver ruta</a>
+            <button class="btn" id="confirm" type="button">Confirmar asistencia</button>
+            <button class="btn out" id="open-invite" type="button">Invitar</button>
+            <button class="btn out" id="leave_event" type="button">Abandonar evento</button>
+          </aside>
+        </div>
+
+        <div id="invite-panel" class="invite-panel hidden">
+          <div class="invite-header">
+            <h3>Invitar personas</h3>
+            <button type="button" id="close-invite" class="btn out small">Cerrar</button>
+          </div>
+          <input id="invite-search" class="grow" type="search" placeholder="Buscar en tus amigos o grupos" />
+          <div id="invite-status" class="invite-status"></div>
+          <div id="invite-results" class="invite-results"></div>
+        </div>
+        <div class="row">
+          <a class="btn out" href="${routePath}/edit">Editar evento</a>
+          <button class="btn out" type="button">Dejar review</button>
+          <button class="btn out" type="button">Denunciar</button>
+        </div>
+      `;
+
+      const confirmButton = document.getElementById('confirm') as HTMLButtonElement | null;
+      const openInviteButton = document.getElementById('open-invite') as HTMLButtonElement | null;
+      const closeInviteButton = document.getElementById('close-invite') as HTMLButtonElement | null;
+      const invitePanel = document.getElementById('invite-panel');
+      const inviteSearch = document.getElementById('invite-search') as HTMLInputElement | null;
+      const inviteStatus = document.getElementById('invite-status');
+      const inviteResults = document.getElementById('invite-results');
+      const leaveButton = document.getElementById('leave_event') as HTMLButtonElement | null;
+
+      const currentAuth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
+      const currentUserId = currentAuth?.user?.id ?? currentAuth?.id;
+      let inviteOptions: InviteOption[] = [];
+
+      const setInviteStatus = (message: string, isError = false) => {
+        if (!inviteStatus) return;
+        inviteStatus.textContent = message || '';
+        inviteStatus.style.display = message ? 'block' : 'none';
+        inviteStatus.style.color = isError ? '#b42318' : '#1d6f42';
+      };
+
+      const renderInviteOptions = () => {
+        if (!inviteResults) return;
+        const query = (inviteSearch?.value || '').trim().toLowerCase();
+        const filtered = inviteOptions.filter((person: InviteOption) => {
+          const haystack = [person.name, person.email, person.nickname, person.groupName].filter(Boolean).join(' ').toLowerCase();
+          return !query || haystack.includes(query);
+        });
+
+        if (!filtered.length) {
+          inviteResults.innerHTML = '<p class="empty-state">No se encontraron amigos o grupos con ese nombre.</p>';
+          return;
         }
-      } catch (error) {
-        alert(error instanceof Error ? error.message : 'No se pudo invitar a este evento.');
-      }
-    });
 
-    leaveButton?.addEventListener('click', async () => {
+        inviteResults.innerHTML = filtered.map((person: InviteOption) => `
+          <div class="invite-item">
+            <div class="invite-person">
+              <strong>${person.name}</strong>
+              <small>${person.kind === 'group' ? `${person.groupName} · grupo` : person.groupName ? `${person.groupName} · amigo` : 'Amigo'}</small>
+            </div>
+            <button
+              class="btn out small"
+              type="button"
+              data-user-id="${person.kind === 'group' ? '' : person.id || ''}"
+              data-group-id="${person.kind === 'group' ? person.groupId || '' : ''}"
+            >
+              ${person.kind === 'group' ? 'Invitar grupo' : 'Invitar'}
+            </button>
+          </div>
+        `).join('');
+
+        inviteResults.querySelectorAll<HTMLButtonElement>('button[data-user-id], button[data-group-id]').forEach((button) => {
+          button.addEventListener('click', async () => {
+            const userId = button.getAttribute('data-user-id') || undefined;
+            const groupId = button.getAttribute('data-group-id') || undefined;
+            if ((!userId && !groupId) || !eventId) return;
+
+            try {
+              setInviteStatus('Enviando invitación...');
+              await api.inviteToEvent(eventId, userId, groupId);
+              setInviteStatus('Invitación enviada correctamente.');
+              button.textContent = groupId ? 'Grupo invitado' : 'Invitado';
+              button.disabled = true;
+            } catch (error) {
+              setInviteStatus(error instanceof Error ? error.message : 'No se pudo enviar la invitación.', true);
+            }
+          });
+        });
+      };
+
+      const loadInviteOptions = async () => {
+        if (!inviteResults || !currentUserId) {
+          setInviteStatus('Iniciá sesión para invitar personas.', true);
+          return;
+        }
+
+        try {
+          setInviteStatus('Cargando amigos y grupos...');
+          const [friendsResponse, groupsResponse] = await Promise.all([
+            api.getFriends(currentUserId),
+            api.getGroups(),
+          ]);
+
+          const friends = (Array.isArray(friendsResponse) ? friendsResponse : []).map((friendship: Record<string, any>) => {
+            const isSender = friendship.senderId === currentUserId;
+            const person = isSender ? friendship.receiver : friendship.sender;
+            return {
+              id: person?.id,
+              kind: 'friend' as const,
+              name: [person?.firstName, person?.lastName].filter(Boolean).join(' ') || person?.nickname || person?.email || 'Amigo',
+              email: person?.email || '',
+              nickname: person?.nickname || '',
+              groupName: '',
+              groupId: '',
+            };
+          }).filter((person: InviteOption) => person.id && person.id !== currentUserId);
+
+          const groupOptions = (Array.isArray(groupsResponse) ? groupsResponse : [])
+            .filter((group: Record<string, any>) => group && group.id)
+            .map((group: Record<string, any>) => ({
+              id: group.id,
+              kind: 'group' as const,
+              name: group.name || 'Grupo',
+              email: '',
+              nickname: '',
+              groupName: group.name || 'Grupo',
+              groupId: group.id,
+            }));
+
+          const groupMembers = (Array.isArray(groupsResponse) ? groupsResponse : []).flatMap((group: Record<string, any>) => {
+            const members = Array.isArray(group.members) ? group.members : [];
+            return members.filter((person: Record<string, any>) => person && person.id && person.id !== currentUserId).map((person: Record<string, any>) => ({
+              id: person.id,
+              kind: 'member' as const,
+              name: [person.firstName, person.lastName].filter(Boolean).join(' ') || person.nickname || person.email || 'Miembro',
+              email: person.email || '',
+              nickname: person.nickname || '',
+              groupName: group.name || 'Grupo',
+              groupId: group.id,
+            }));
+          });
+
+          inviteOptions = [...friends, ...groupOptions, ...groupMembers];
+          renderInviteOptions();
+          setInviteStatus('');
+        } catch (error) {
+          setInviteStatus(error instanceof Error ? error.message : 'No se pudieron cargar tus contactos.', true);
+        }
+      };
+
+      confirmButton?.addEventListener('click', async () => {
+        try {
+          await api.confirmAssistance(eventId);
+          confirmButton.textContent = 'Asistencia confirmada';
+        } catch (error) {
+          alert(error instanceof Error ? error.message : 'No se pudo confirmar la asistencia.');
+        }
+      });
+
+      openInviteButton?.addEventListener('click', () => {
+        if (!invitePanel) return;
+        invitePanel.classList.toggle('hidden');
+        if (!invitePanel.classList.contains('hidden')) {
+          loadInviteOptions();
+        }
+      });
+
+      closeInviteButton?.addEventListener('click', () => {
+        invitePanel?.classList.add('hidden');
+      });
+
+      inviteSearch?.addEventListener('input', renderInviteOptions);
+
+      leaveButton?.addEventListener('click', async () => {
+        try {
+          await api.leaveEvent(eventId);
+          leaveButton.textContent = 'Has abandonado el evento';
+        } catch (error) {
+          alert(error instanceof Error ? error.message : 'No se pudo abandonar el evento.');
+        }
+      });
+    };
+
+    const loadEvent = async () => {
       try {
-        await api.leaveEvent(eventId);
-        leaveButton.textContent = 'Has abandonado el evento';
+        const payload = await api.getEventsById(routeKey);
+        const event = payload?.event ?? payload;
+
+        if (!event || typeof event !== 'object') {
+          throw new Error('No se encontró el evento solicitado.');
+        }
+
+        renderEvent(event);
       } catch (error) {
-        alert(error instanceof Error ? error.message : 'No se pudo abandonar el evento.');
+        if (!shell) return;
+        shell.innerHTML = `
+          <div class="box">
+            <h2>Evento no encontrado</h2>
+            <p>${error instanceof Error ? error.message : 'No pudimos cargar este evento.'}</p>
+            <a class="btn" href="/dashboard">Volver al dashboard</a>
+          </div>
+        `;
       }
-    });
+    };
+
+    loadEvent();
   </script>
+
+  <style>
+    .event-header h2 {
+      margin: 0.25rem 0 0.5rem;
+      font-size: 2rem;
+    }
+    .eyebrow {
+      margin: 0;
+      color: #4957c7;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+    }
+    .avatar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .avatar-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3247b1;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .actions-box {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .invite-panel {
+      margin-top: 1rem;
+      border: 1px solid #dfe3f7;
+      background: #f8f9ff;
+      border-radius: 16px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .invite-panel.hidden {
+      display: none;
+    }
+    .invite-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .invite-header h3 {
+      margin: 0;
+    }
+    .invite-status {
+      display: none;
+      font-size: 0.88rem;
+      color: #1d6f42;
+      min-height: 1.25rem;
+    }
+    .invite-results {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 20rem;
+      overflow: auto;
+    }
+    .invite-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background: white;
+      border: 1px solid #e5e7f3;
+      border-radius: 12px;
+      padding: 0.75rem;
+    }
+    .invite-person {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .invite-person small {
+      color: #5d647d;
+    }
+    .empty-state {
+      margin: 0;
+      color: #5d647d;
+    }
+    .btn.small {
+      padding: 0.45rem 0.7rem;
+      font-size: 0.78rem;
+    }
+  </style>
 </AppLayout>

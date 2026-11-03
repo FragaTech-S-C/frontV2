@@ -19,7 +19,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
 
     <div class="row">
       <button class="btn" type="submit">Guardar cambios</button>
-      <button class="btn out" type="button" id="reset-password-button">Restablecer contraseña</button>
+      <a class="btn out" href="/reset-password">Restablecer contraseña</a>
       <a class="btn out" href="/profile/friends">Ver amigos</a>
     </div>
     <p id="profile-status" aria-live="polite"></p>
@@ -124,19 +124,6 @@ import AppLayout from '@/layouts/AppLayout.astro';
         if (statusEl) {
           statusEl.textContent = error instanceof Error ? error.message : 'No se pudo guardar el perfil.';
         }
-      }
-    });
-
-    document.getElementById('reset-password-button')?.addEventListener('click', async () => {
-      const currentPassword = window.prompt('Ingresá tu contraseña actual');
-      if (!currentPassword) return;
-      const newPassword = window.prompt('Ingresá la nueva contraseña');
-      if (!newPassword) return;
-      try {
-        await api.resetPassword(currentPassword, newPassword);
-        if (statusEl) statusEl.textContent = 'Contraseña actualizada correctamente.';
-      } catch (error) {
-        if (statusEl) statusEl.textContent = error instanceof Error ? error.message : 'No se pudo restablecer la contraseña.';
       }
     });
 

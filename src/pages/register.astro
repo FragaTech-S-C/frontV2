@@ -16,6 +16,7 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
       </select>
     </label>
     <button class="btn" type="submit">Registrarme</button>
+    <a class="btn out" href={import.meta.env.PUBLIC_API_URL ? `${import.meta.env.PUBLIC_API_URL}/auth/google` : 'http://localhost:3000/api/auth/google'}>Registrarme con Google</a>
     <p id="register-status" aria-live="polite"></p>
     <p>¿Ya tenés cuenta? <a href="/login">Iniciá sesión</a></p>
   </form>
@@ -25,6 +26,12 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
 
     const registerForm = document.getElementById('register-form');
     const registerStatus = document.getElementById('register-status');
+
+    const setStatus = (message: string, isError = false) => {
+      if (!registerStatus) return;
+      registerStatus.textContent = message;
+      registerStatus.style.color = isError ? '#b42318' : '#1d6f42';
+    };
 
     registerForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -40,17 +47,14 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
 
       try {
         if (!registerStatus) throw new Error('Missing register');
-        registerStatus.textContent = 'Creando cuenta...';
-        console.log("creando user")
+        setStatus('Creando cuenta...');
         const data = await api.register(payload);
         setStoredAuth(data);
         window.location.href = '/dashboard';
       } catch (error) {
-        console.log(error);
-        if (registerStatus) {
-          registerStatus.textContent = error instanceof Error ? error.message : 'No se pudo registrar al usuario.';
-        }
+        setStatus(error instanceof Error ? error.message : 'No se pudo registrar al usuario.', true);
       }
     });
+
   </script>
 </AuthLayout>

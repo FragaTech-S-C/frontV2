@@ -121,6 +121,63 @@ export const api = {
     return data;
   },
 
+  loginWithGoogle: async (profile: { email: string; firstName?: string; lastName?: string; nickname?: string; avatar?: string }) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo iniciar sesión con Google.');
+    }
+    setStoredAuth(data);
+    return data;
+  },
+
+  requestPasswordReset: async (email: string) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/password/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo solicitar el restablecimiento.');
+    }
+    return data;
+  },
+
+  confirmPasswordReset: async (token: string, newPassword: string) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/password/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo confirmar el restablecimiento.');
+    }
+    return data;
+  },
+
+  resetPasswordByEmail: async (email: string, newPassword: string, token?: string) => {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/password/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, newPassword, token }),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo restablecer la contraseña.');
+    }
+    return data;
+  },
+
   authMe: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
@@ -264,6 +321,37 @@ export const api = {
     const data = await jsonOrText(response);
     if (!response.ok) {
       throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar tus amigos.');
+    }
+    return data;
+  },
+
+  getGroups: async () => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/groups`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar tus grupos.');
+    }
+    return data;
+  },
+
+  createGroup: async (payload: Record<string, unknown>) => {
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    const response = await fetch(`${baseUrl}/groups`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo crear el grupo.');
     }
     return data;
   },
@@ -452,47 +540,51 @@ export const api = {
     return data;
   },
 
-  inviteToEvent: async (eventId: string) => {
+  inviteToEvent: async (eventId: string, userId?: string, groupId?: string) => {
+    if (!userId && !groupId) {
+      throw new Error('Seleccioná una persona o un grupo para invitar al evento.');
+    }
+
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const inviteUrl = `${window.location.origin}/events/${eventId}`;
+    const response = await fetch(`${baseUrl}/events/${eventId}/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ userId, groupId }),
+    });
 
-    try {
-      const response = await fetch(`${baseUrl}/events/${eventId}/invite`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      if (response.status === 404 || response.status === 405) {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(inviteUrl);
-        } else {
-          window.prompt('Copia este enlace del evento:', inviteUrl);
-        }
-
-        return { message: 'Enlace del evento copiado al portapapeles.', url: inviteUrl };
-      }
-
-      const data = await jsonOrText(response);
-      if (!response.ok) {
-        throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo enviar la invitación.');
-      }
-
-      return data;
-    } catch (error) {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(inviteUrl);
-        return { message: 'Enlace del evento copiado al portapapeles.', url: inviteUrl };
-      }
-
-      window.prompt('Copia este enlace del evento:', inviteUrl);
-      return { message: 'Enlace del evento listo para compartir.', url: inviteUrl };
+    const data = await jsonOrText(response);
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo enviar la invitación.');
     }
-  },
 
+    return data;
+  },
+  getEventsById: async (eventId: string | undefined) => {
+    if (!eventId) {
+      throw new Error('No se recibió el identificador del evento.');
+    }
+    const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
+    console.log(`${baseUrl}/events/${encodeURIComponent(eventId)}`,  {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const response = await fetch(`${baseUrl}/events/${encodeURIComponent(eventId)}`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await jsonOrText(response);
+
+    if (!response.ok) {
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo cargar el evento.');
+    }
+
+    return data;
+  },
   getEvents: async (params: Record<string, string | number | undefined> = {}) => {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {

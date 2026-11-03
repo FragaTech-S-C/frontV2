@@ -91,6 +91,19 @@ type EventCardProps = {
       return parts.length ? parts.join(' - ') : 'Sin ubicación';
     };
 
+    const slugify = (value) => String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'evento';
+
+    const buildEventPath = (event) => {
+      const rawId = event?.id ?? event?._id;
+      if (rawId) return `/events/${String(rawId)}`;
+      return `/events/${slugify(event?.title || event?.name || 'evento')}`;
+    };
+
     const renderEvents = (events) => {
       if (!grid) return;
       grid.innerHTML = '';
@@ -104,8 +117,11 @@ type EventCardProps = {
 
       items.forEach((event) => {
         const card = document.createElement('a');
-        card.href = `/events/${event.id}`;
+        const eventId = String(event.id ?? event._id ?? '');
+        const eventPath = buildEventPath(event);
+        card.href = eventPath;
         card.className = 'box';
+        card.setAttribute('data-event-id', eventId);
         card.style.textDecoration = 'none';
         card.style.color = 'inherit';
         const imageUrl = event.coverImage || event.bannerImage;
@@ -114,6 +130,19 @@ type EventCardProps = {
           <h3>${event.title || 'Evento sin título'}</h3>
           <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
         `;
+        card.addEventListener('click', async (clickEvent) => {
+          if (!eventId) return;
+          clickEvent.preventDefault();
+          try {
+            await fetch(`${baseApiUrl}/events/${encodeURIComponent(eventId)}`, {
+              headers: { Authorization: `Bearer ${getStoredToken()}` },
+            });
+            window.location.href = eventPath;
+          } catch (error) {
+            console.error('No se pudo cargar el evento:', error);
+            window.location.href = eventPath;
+          }
+        });
         grid.appendChild(card);
       });
 

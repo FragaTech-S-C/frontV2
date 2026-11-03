@@ -1,0 +1,78 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+export const prerender = false;
+const rawEventId = Astro.url.searchParams.get('id') || Astro.params.id || '';
+const routeLatParam = Astro.url.searchParams.get('lat');
+const routeLngParam = Astro.url.searchParams.get('lng');
+const routeLat = routeLatParam !== null && routeLatParam !== '' ? Number(routeLatParam) : Number.NaN;
+const routeLng = routeLngParam !== null && routeLngParam !== '' ? Number(routeLngParam) : Number.NaN;
+---
+<AppLayout title="Ruta del evento">
+  <div class="box">
+    <h2>Ubicación del evento</h2>
+    <div id="route-map" style="height: 480px; width: 100%; border-radius: 16px; overflow: hidden;"></div>
+    <p id="route-status" aria-live="polite"></p>
+    <a class="btn out" href={rawEventId ? `/events/${encodeURIComponent(rawEventId)}` : '/dashboard'}>Volver al evento</a>
+  </div>
+
+  <script define:vars={{ eventId: rawEventId, initialLat: Number.isFinite(routeLat) ? routeLat : null, initialLng: Number.isFinite(routeLng) ? routeLng : null }}>
+    import { api } from '@/lib/api';
+
+    const setStatus = (message, isError = false) => {
+      const status = document.getElementById('route-status');
+      if (!status) return;
+      status.textContent = message;
+      status.style.color = isError ? '#b42318' : '#1d6f42';
+    };
+
+    const mapRoot = document.getElementById('route-map');
+    if (!mapRoot) throw new Error('Map container missing');
+
+    const loadLeaflet = () => new Promise((resolve, reject) => {
+      if (window.L) return resolve(window.L);
+
+      const styleLink = document.createElement('link');
+      styleLink.rel = 'stylesheet';
+      styleLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(styleLink);
+
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => resolve(window.L);
+      script.onerror = () => reject(new Error('No se pudo cargar OpenStreetMap.'));
+      document.head.appendChild(script);
+    });
+
+    const eventKey = eventId || new URLSearchParams(window.location.search).get('id') || '';
+    if (!eventKey) {
+      setStatus('No se recibió el identificador del evento.', true);
+      throw new Error('Missing event id');
+    }
+
+    loadLeaflet()
+      .then(() => api.getEventsById(eventKey))
+      .then((event) => {
+        const payload = event?.event ?? event;
+        const lat = Number.isFinite(initialLat) ? initialLat : Number(payload?.latitude ?? payload?.location?.lat ?? payload?.location?.latitude ?? -34.6037);
+        const lng = Number.isFinite(initialLng) ? initialLng : Number(payload?.longitude ?? payload?.location?.lng ?? payload?.location?.longitude ?? -58.3816);
+        const title = payload?.title || 'Evento';
+        const locationText = [payload?.venueName, payload?.location, payload?.address, payload?.city, payload?.country].filter(Boolean).join(' · ') || 'Ubicación no definida';
+
+        setStatus(locationText);
+        const map = window.L.map('route-map').setView([lat, lng], 14);
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors',
+          maxZoom: 19,
+        }).addTo(map);
+
+        const marker = window.L.marker([lat, lng]).addTo(map).bindPopup(`<strong>${title}</strong><br />${locationText}`);
+        map.fitBounds(marker.getLatLng().toBounds(50), { padding: [20, 20] });
+      })
+      .catch((error) => {
+        setStatus(error instanceof Error ? error.message : 'No se pudo cargar la ubicación del evento.', true);
+        if (mapRoot) {
+          mapRoot.innerHTML = '<div style="display:grid;place-items:center;height:100%;color:#7a2e2e;">No se pudo cargar la ubicación del evento.</div>';
+        }
+      });
+  </script>
+</AppLayout>

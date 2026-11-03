@@ -6,6 +6,8 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
     <label>Email<input type="email" name="email" required /></label>
     <label>Contraseña<input type="password" name="password" required /></label>
     <button class="btn" type="submit">Entrar</button>
+    <a class="btn out" href={import.meta.env.PUBLIC_API_URL ? `${import.meta.env.PUBLIC_API_URL}/auth/google` : 'http://localhost:3000/api/auth/google'}>Continuar con Google</a>
+    <a class="btn out" href="/reset-password">Olvidé mi contraseña</a>
     <p id="login-status" aria-live="polite"></p>
     <p>¿No tenés cuenta? <a href="/register">Registrate</a></p>
   </form>
@@ -15,6 +17,13 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
 
     const loginForm = document.getElementById('login-form');
     const loginStatus = document.getElementById('login-status');
+
+    const setStatus = (message: string, isError = false) => {
+      if (!loginStatus) return;
+      loginStatus.textContent = message;
+      loginStatus.style.color = isError ? '#b42318' : '#1d6f42';
+    };
+
     loginForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const formData = new FormData(loginForm as HTMLFormElement);
@@ -23,18 +32,16 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
         password: String(formData.get('password') ?? '').trim(),
       };
 
-      if (loginStatus) loginStatus.textContent = 'Iniciando sesión...';
+      if (loginStatus) setStatus('Iniciando sesión...');
 
       try {
         const data = await api.login(payload);
-        localStorage.setItem("accessToken", data.accessToken);
-        
+        localStorage.setItem('accessToken', data.accessToken);
         window.location.href = '/dashboard';
       } catch (error) {
-        if (loginStatus) {
-          loginStatus.textContent = error instanceof Error ? error.message : 'No se pudo iniciar sesión.';
-        }
+        setStatus(error instanceof Error ? error.message : 'No se pudo iniciar sesión.', true);
       }
     });
+
   </script>
 </AuthLayout>
