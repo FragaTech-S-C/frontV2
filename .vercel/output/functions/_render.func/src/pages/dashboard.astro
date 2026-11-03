@@ -1,0 +1,341 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import EventCard from '@/components/EventCard.astro';
+
+const columnas = ['Mis eventos', 'Institucionales', 'Recomendados'];
+const apiBase = (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '');
+
+const initialEvents: Array<Record<string, unknown>> = [];
+type EventCardProps = {
+  event?: {
+    id?: string;
+    title?: string;
+    category?: string;
+    startDate?: string;
+    location?: string | null;
+    city?: string | null;
+    country?: string | null;
+    address?: string | null;
+    coverImage?: string | null;
+    bannerImage?: string | null;
+  };
+  id?: string;
+  title?: string;
+  category?: string;
+  startDate?: string;
+  location?: string | null;
+  city?: string | null;
+  country?: string | null;
+  address?: string | null;
+  coverImage?: string | null;
+  bannerImage?: string | null;
+};
+
+---
+<AppLayout title="Dashboard">
+  <div class="row">
+    <input id="dashboard-search" class="grow" type="search" aria-label="Buscar eventos" placeholder="Buscar eventos" />
+    <button id="dashboard-search-btn" class="btn" type="button">Buscar</button>
+    <a class="btn" href="/events/new">Nuevo evento</a>
+  </div>
+
+  <div id="dashboard-status" class="box" style="margin-bottom:1rem;display:none"></div>
+  <div class="grid" id="dashboard-grid">
+    {initialEvents.map((event: EventCardProps) => (
+      <EventCard event={event} />
+    ))}
+  </div>
+
+  <section id="admin-institutions-section" class="box" style="margin-top:1.5rem;display:none;">
+    <h2>Administración de instituciones</h2>
+    <form id="admin-institution-form">
+      <div class="grid">
+        <label>
+          Nombre
+          <input name="name" type="text" placeholder="Nombre de la institución" required />
+        </label>
+        <label>
+          Email
+          <input name="email" type="email" placeholder="contacto@institucion.com" />
+        </label>
+        <label>
+          Sitio web
+          <input name="website" type="url" placeholder="https://example.com" />
+        </label>
+        <label>
+          Teléfono
+          <input name="phone" type="tel" placeholder="+54 11 1234-5678" />
+        </label>
+        <label>
+          Ciudad
+          <input name="city" type="text" placeholder="Buenos Aires" />
+        </label>
+        <label>
+          País
+          <input name="country" type="text" placeholder="Argentina" />
+        </label>
+      </div>
+      <label>
+        Dirección
+        <input name="address" type="text" placeholder="Calle, número, barrio" />
+      </label>
+      <label>
+        Descripción
+        <textarea name="description" rows="3" placeholder="Descripción de la institución"></textarea>
+      </label>
+      <button class="btn" type="submit">Agregar institución</button>
+      <p id="admin-institution-status" aria-live="polite"></p>
+    </form>
+
+    <div style="margin-top:1rem;">
+      <h3>Instituciones</h3>
+      <div id="admin-institutions-list" class="grid"></div>
+    </div>
+  </section>
+
+  <script is:inline define:vars={{ apiBase }}>
+    const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
+    const getStoredToken = () => localStorage.getItem('meetia-access-token') ?? localStorage.getItem('accessToken') ?? localStorage.getItem('access_token') ?? '';
+    const grid = document.getElementById('dashboard-grid');
+    const status = document.getElementById('dashboard-status');
+    const searchInput = document.getElementById('dashboard-search');
+    const searchButton = document.getElementById('dashboard-search-btn');
+
+    const normalizeEvent = (entry) => {
+      const event = entry?.event ?? entry ?? {};
+      return {
+        ...event,
+        id: event.id ?? event._id,
+        title: event.title ?? event.name ?? 'Evento sin título',
+        category: event.category ?? event.type ?? 'Evento',
+        startDate: event.startDate ?? event.start_date ?? event.date ?? null,
+        coverImage: event.coverImage ?? event.cover_image ?? event.bannerImage ?? event.banner_image ?? null,
+        bannerImage: event.bannerImage ?? event.banner_image ?? event.coverImage ?? event.cover_image ?? null,
+        location: event.location ?? event.venue ?? null,
+        city: event.city ?? null,
+        country: event.country ?? null,
+        address: event.address ?? event.street ?? null,
+      };
+    };
+
+    const normalizeEvents = (payload) => {
+      const items = Array.isArray(payload) ? payload : (payload?.events ?? payload?.data ?? []);
+      return items.map(normalizeEvent).filter(Boolean);
+    };
+
+    const formatArgentinaDate = (value) => {
+      if (!value) return 'Sin fecha';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'Sin fecha';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    };
+
+    const formatLocation = (event) => {
+      const parts = [event.location, event.city, event.country, event.address].filter(Boolean);
+      return parts.length ? parts.join(' - ') : 'Sin ubicación';
+    };
+
+    const slugify = (value) => String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'evento';
+
+    const buildEventPath = (event) => {
+      const rawId = event?.id ?? event?._id;
+      if (rawId) return `/events/${String(rawId)}`;
+      return `/events/${slugify(event?.title || event?.name || 'evento')}`;
+    };
+
+    const renderEvents = (events) => {
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      const items = normalizeEvents(events);
+      if (!items || items.length === 0) {
+        status.style.display = 'block';
+        status.textContent = 'No hay eventos para mostrar.';
+        return;
+      }
+
+      items.forEach((event) => {
+        const card = document.createElement('a');
+        const eventId = String(event.id ?? event._id ?? '');
+        const eventPath = buildEventPath(event);
+        card.href = eventPath;
+        card.className = 'box';
+        card.setAttribute('data-event-id', eventId);
+        card.style.textDecoration = 'none';
+        card.style.color = 'inherit';
+        const imageUrl = event.coverImage || event.bannerImage;
+        card.innerHTML = `
+          ${imageUrl ? `<img src="${imageUrl}" alt="${event.title || 'Evento'}" style="width:100%;height:180px;object-fit:cover;border-radius:12px;display:block;" />` : '<div class="ph">Evento</div>'}
+          <h3>${event.title || 'Evento sin título'}</h3>
+          <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
+        `;
+        card.addEventListener('click', async (clickEvent) => {
+          if (!eventId) return;
+          clickEvent.preventDefault();
+          try {
+            await fetch(`${baseApiUrl}/events/${encodeURIComponent(eventId)}`, {
+              headers: { Authorization: `Bearer ${getStoredToken()}` },
+            });
+            window.location.href = eventPath;
+          } catch (error) {
+            console.error('No se pudo cargar el evento:', error);
+            window.location.href = eventPath;
+          }
+        });
+        grid.appendChild(card);
+      });
+
+      if (status) {
+        status.style.display = 'none';
+      }
+    };
+
+    const loadEvents = async (query = '') => {
+      const token = getStoredToken();
+      if (!token) {
+        if (status) {
+          status.style.display = 'block';
+          status.textContent = 'Iniciá sesión para ver los eventos.';
+        }
+        window.location.href = '/login';
+        return;
+      }
+
+      if (status) {
+        status.style.display = 'block';
+        status.textContent = 'Cargando eventos...';
+      }
+
+      try {
+        const url = query
+          ? `${baseApiUrl}/search?q=${encodeURIComponent(query)}&limit=6`
+          : `${baseApiUrl}/events/upcoming?limit=6`;
+
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'No se pudieron cargar los eventos.');
+        }
+
+        renderEvents(payload);
+      } catch (error) {
+        if (status) {
+          status.style.display = 'block';
+          status.textContent = error.message || 'No se pudieron cargar los eventos.';
+        }
+      }
+    };
+
+    if (searchButton && searchInput) {
+      searchButton.addEventListener('click', () => {
+        loadEvents(searchInput.value.trim());
+      });
+
+      searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          loadEvents(searchInput.value.trim());
+        }
+      });
+    }
+
+    loadEvents();
+  </script>
+
+  <script type="module">
+    import { api } from '@/lib/api';
+
+    const auth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
+    const role = String(auth?.user?.role ?? auth?.role ?? '').toUpperCase();
+    const adminSection = document.getElementById('admin-institutions-section');
+    const institutionForm = document.getElementById('admin-institution-form');
+    const institutionStatus = document.getElementById('admin-institution-status');
+    const institutionsList = document.getElementById('admin-institutions-list');
+
+    const renderInstitutions = (institutions) => {
+      if (!institutionsList) return;
+      const items = Array.isArray(institutions) ? institutions : [];
+
+      if (!items.length) {
+        institutionsList.innerHTML = '<p>No hay instituciones creadas todavía.</p>';
+        return;
+      }
+
+      institutionsList.innerHTML = items.map((institution) => {
+        const name = institution?.name || 'Institución sin nombre';
+        const city = institution?.city ? String(institution.city) : '';
+        const country = institution?.country ? String(institution.country) : '';
+        const location = [city, country].filter(Boolean).join(', ');
+        const website = institution?.website ? String(institution.website) : '';
+
+        return `
+          <article class="box" style="padding:1rem;">
+            <h4>${name}</h4>
+            <p>${location || 'Sin ubicación'}</p>
+            ${website ? `<a href="${website}" target="_blank" rel="noreferrer">Sitio web</a>` : '<span>Sin sitio web</span>'}
+          </article>
+        `;
+      }).join('');
+    };
+
+    const loadInstitutions = async () => {
+      if (!adminSection || role !== 'ADMIN') return;
+
+      try {
+        const institutions = await api.getInstitutions();
+        renderInstitutions(institutions);
+      } catch (error) {
+        if (institutionsList) {
+          institutionsList.innerHTML = `<p>No se pudieron cargar las instituciones.</p>`;
+        }
+      }
+    };
+
+    if (role === 'ADMIN' && adminSection) {
+      adminSection.style.display = 'block';
+      loadInstitutions();
+    }
+
+    institutionForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (institutionStatus) institutionStatus.textContent = 'Creando institución...';
+
+      try {
+        const formData = new FormData(institutionForm);
+        const payload = {
+          name: String(formData.get('name') ?? '').trim(),
+          email: String(formData.get('email') ?? '').trim() || undefined,
+          website: String(formData.get('website') ?? '').trim() || undefined,
+          phone: String(formData.get('phone') ?? '').trim() || undefined,
+          address: String(formData.get('address') ?? '').trim() || undefined,
+          city: String(formData.get('city') ?? '').trim() || undefined,
+          country: String(formData.get('country') ?? '').trim() || undefined,
+          description: String(formData.get('description') ?? '').trim() || undefined,
+        };
+
+        if (!payload.name) {
+          throw new Error('El nombre de la institución es obligatorio.');
+        }
+
+        await api.createInstitution(payload);
+        institutionForm.reset();
+        if (institutionStatus) institutionStatus.textContent = 'Institución creada correctamente.';
+        await loadInstitutions();
+      } catch (error) {
+        if (institutionStatus) {
+          institutionStatus.textContent = error instanceof Error ? error.message : 'No se pudo crear la institución.';
+        }
+      }
+    });
+  </script>
+</AppLayout>

@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@astrojs/node": "8",
-    "@astrojs/vercel": "^11.0.18",
-    "astro": "^5.0.0"
+    "@astrojs/vercel": "^8",
+    "astro": "^5"
   },
   "private": true,
   "devDependencies": {

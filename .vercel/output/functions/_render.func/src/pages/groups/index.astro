@@ -1,0 +1,66 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+<AppLayout title="Mis grupos">
+  <div class="row">
+    <a class="btn" href="/groups/new">Nuevo grupo</a>
+    <a class="btn out" href="/dashboard">Volver</a>
+  </div>
+  <div id="groups-list" class="grid"></div>
+
+  <script>
+    import { api } from '@/lib/api';
+
+    const list = document.getElementById('groups-list');
+    if (!list) throw new Error('Missing groups list root');
+
+    const renderGroups = (groups) => {
+      if (!groups.length) {
+        list.innerHTML = `
+          <div class="box">
+            <h3>Sin grupos todavía</h3>
+            <p>Aún no pertenecés a ningún grupo o no recibiste invitaciones.</p>
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = groups
+        .map((group: any) => {
+          const isInstitutional = group.institutionId || group.type === 'institutional';
+          const label = isInstitutional ? 'Institucional' : 'Personal';
+          const avatarMarkup = group.avatar
+            ? `<img src="${group.avatar}" alt="${group.name}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;" />`
+            : `<div style="display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:#e6e7ff;color:#293a70;font-weight:700;">${group.name?.charAt(0) ?? 'G'}</div>`;
+
+          return `
+            <a class="box" href="/groups/${encodeURIComponent(group.id)}" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;">
+              ${avatarMarkup}
+              <div>
+                <h3 style="margin:0 0 4px;">${group.name}</h3>
+                <p style="margin:0;">${label} · Líder: ${group.owner?.firstName || 'Yo'}</p>
+                <small>${group.institutionId ? 'Institución asociada' : 'Grupo personal'}</small>
+              </div>
+            </a>
+          `;
+        })
+        .join('');
+    };
+
+    const loadGroups = async () => {
+      try {
+        const groups = await api.getGroups();
+        renderGroups(Array.isArray(groups) ? groups : []);
+      } catch (error) {
+        list.innerHTML = `
+          <div class="box">
+            <h3>No se pudieron cargar tus grupos</h3>
+            <p>${error instanceof Error ? error.message : 'Intentalo nuevamente más tarde.'}</p>
+          </div>
+        `;
+      }
+    };
+
+    loadGroups();
+  </script>
+</AppLayout>

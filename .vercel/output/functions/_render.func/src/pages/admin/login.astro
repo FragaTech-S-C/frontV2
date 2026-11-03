@@ -1,0 +1,41 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+
+<AppLayout title="Acceso administrador">
+  <form id="admin-login-form" class="box">
+    <h2>Ingreso de administrador</h2>
+    <label>
+      Email
+      <input name="email" type="email" placeholder="admin@meetia.com" required />
+    </label>
+    <label>
+      Contraseña
+      <input name="password" type="password" placeholder="••••••••" required />
+    </label>
+    <button class="btn" type="submit">Ingresar</button>
+    <p id="admin-login-status" aria-live="polite"></p>
+  </form>
+
+  <script type="module">
+    import { api } from '@/lib/api';
+
+    const form = document.getElementById('admin-login-form');
+    const status = document.getElementById('admin-login-status');
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const email = String(formData.get('email') ?? '').trim();
+      const password = String(formData.get('password') ?? '').trim();
+
+      try {
+        const result = await api.adminLogin({ email, password });
+        status.textContent = 'Sesión de administrador iniciada correctamente.';
+        window.location.href = '/dashboard';
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : 'No se pudo iniciar sesión como administrador.';
+      }
+    });
+  </script>
+</AppLayout>

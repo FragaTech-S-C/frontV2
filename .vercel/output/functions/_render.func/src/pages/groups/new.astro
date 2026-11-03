@@ -1,0 +1,269 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+<AppLayout title="Nuevo grupo">
+  <form id="group-form" class="box">
+    <label>Nombre<input name="name" required /></label>
+    <label>Descripción<textarea name="description" rows="4"></textarea></label>
+
+    <div class="row">
+      <label class="grow">Tipo
+        <select name="type">
+          <option value="personal">Personal</option>
+          <option value="institutional">Institucional</option>
+        </select>
+      </label>
+      <!-- <label class="grow">Líder<input name="leader" value="Yo" readonly /></label> -->
+    </div>
+
+    <div id="group-institutional-fields" style="display:none;">
+      <label>Institución asociada
+        <select name="institutionId">
+          <option value="">Seleccioná una institución</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="box" style="padding:0.75rem; margin:0.75rem 0;">
+      <label>
+        Buscar miembro por nick
+        <input id="member-search" type="search" placeholder="Ej: ana, mate, lu" autocomplete="off" />
+      </label>
+      <div id="member-results" style="display:grid; gap:0.5rem; margin-top:0.5rem;"></div>
+      <div id="selected-members" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem;"></div>
+    </div>
+
+    <div class="row">
+      <button class="btn" type="submit">Crear grupo</button>
+      <a class="btn out" href="/groups">Cancelar</a>
+    </div>
+    <p id="group-status" aria-live="polite"></p>
+  </form>
+
+  <script>
+    import { api } from '@/lib/api';
+
+    const form = document.getElementById('group-form') as HTMLFormElement;
+    const statusBox = document.getElementById('group-status');
+    const typeField = form?.querySelector('select[name="type"]') as HTMLSelectElement | null;
+    const institutionalFields = document.getElementById('group-institutional-fields');
+    const institutionSelect = form?.querySelector('select[name="institutionId"]') as HTMLSelectElement | null;
+    const leaderInput = form?.querySelector('input[name="leader"]') as HTMLInputElement | null;
+    const memberSearch = document.getElementById('member-search') as HTMLInputElement | null;
+    const memberResults = document.getElementById('member-results') as HTMLDivElement | null;
+    const selectedMembersWrap = document.getElementById('selected-members');
+    let selectedMembers: Array<Record<string, any>> = [];
+
+    const loadInstitutions = async () => {
+      if (!institutionSelect) return;
+
+      try {
+        const institutions = await api.getInstitutions();
+        const previousValue = institutionSelect.value;
+        institutionSelect.innerHTML = '<option value="">Seleccioná una institución</option>';
+
+        if (Array.isArray(institutions) && institutions.length) {
+          institutions.forEach((institution: Record<string, any>) => {
+            const option = document.createElement('option');
+            option.value = String(institution.id ?? '');
+            option.textContent = institution.name ?? 'Institución';
+            institutionSelect.appendChild(option);
+          });
+        } else {
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = 'No hay instituciones disponibles';
+          institutionSelect.appendChild(option);
+        }
+
+        if (previousValue && Array.from(institutionSelect.options).some((option) => option.value === previousValue)) {
+          institutionSelect.value = previousValue;
+        }
+      } catch (error) {
+        institutionSelect.innerHTML = '<option value="">No se pudieron cargar las instituciones</option>';
+      }
+    };
+
+    let storedUser: Record<string, any> = {};
+    try {
+      storedUser = JSON.parse(localStorage.getItem('meetia-auth') || '{}') as Record<string, any>;
+    } catch {
+      storedUser = {};
+    }
+
+    const currentUserId = storedUser?.user?.id ?? storedUser?.id ?? storedUser?.userId ?? localStorage.getItem('meetia-user-id') ?? 'local-user';
+    const currentUserName = storedUser?.user?.name ?? storedUser?.name ?? storedUser?.fullName ?? 'Yo';
+
+    if (leaderInput) {
+      leaderInput.value = currentUserName;
+    }
+
+    const toggleInstitutionalFields = () => {
+      const isInstitutional = String(typeField?.value ?? 'personal') === 'institutional';
+      if (institutionalFields) {
+        institutionalFields.style.display = isInstitutional ? 'block' : 'none';
+      }
+
+      const institutionSelect = form?.querySelector('select[name="institutionId"]') as HTMLSelectElement | null;
+      if (!isInstitutional && institutionSelect) {
+        institutionSelect.value = '';
+      }
+    };
+
+    const slugify = (value: string) =>
+      value
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'grupo';
+
+    const addMemberToSelection = (user: Record<string, any>) => {
+      if (!user || !selectedMembers.some((item) => String(item.id) === String(user.id))) {
+        selectedMembers = [...selectedMembers, user];
+      }
+      renderSelectedMembers();
+      if (memberSearch) {
+        memberSearch.value = '';
+      }
+      renderMemberSuggestions();
+    };
+
+    const renderSelectedMembers = () => {
+      if (!selectedMembersWrap) return;
+      selectedMembersWrap.innerHTML = selectedMembers.length
+        ? selectedMembers.map((member) => `
+            <span class="member-pill">${member.name || member.firstName || member.nickname || member.email} (@${member.nickname || member.email || 'sin-nick'})</span>
+          `).join('')
+        : '<span>Sin invitados aún.</span>';
+    };
+
+    const renderMemberSuggestions = async () => {
+      const query = String((memberSearch as HTMLInputElement | null)?.value || '').trim();
+      if (!memberResults) return;
+
+      if (!query) {
+        memberResults.innerHTML = '<span>Escribí un email para buscar usuarios.</span>';
+        return;
+      }
+
+      try {
+        const users = await api.searchUsersByEmail(query);
+        const visibleUsers = Array.isArray(users) ? users.slice(0, 5) : [];
+
+        if (!visibleUsers.length) {
+          memberResults.innerHTML = '<span>No se encontraron usuarios.</span>';
+          return;
+        }
+
+        memberResults.innerHTML = visibleUsers.map((user: Record<string, any>) => {
+          const label = user.nickname || user.firstName || user.email || 'Usuario';
+          const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || label;
+          return `
+            <button type="button" class="btn out" data-member-id="${user.id}" style="justify-content:flex-start; width:100%;">
+              ${displayName} (@${user.nickname || user.email || 'sin-nick'})
+            </button>
+          `;
+        }).join('');
+
+        memberResults.querySelectorAll('[data-member-id]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const id = button.getAttribute('data-member-id');
+            const user = visibleUsers.find((item: Record<string, any>) => String(item.id) === String(id));
+            if (user) {
+              addMemberToSelection(user);
+            }
+          });
+        });
+      } catch (error) {
+        memberResults.innerHTML = '<span>No se pudieron cargar los usuarios.</span>';
+      }
+    };
+
+    memberSearch?.addEventListener('input', () => {
+      void renderMemberSuggestions();
+    });
+    memberSearch?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const firstMatch = memberResults?.querySelector('[data-member-id]') as HTMLButtonElement | null;
+      if (firstMatch) {
+        firstMatch.click();
+        return;
+      }
+
+      if (statusBox) {
+        statusBox.textContent = 'No hay usuarios coincidentes para invitar.';
+      }
+    });
+    renderSelectedMembers();
+    typeField?.addEventListener('change', toggleInstitutionalFields);
+    void loadInstitutions();
+    toggleInstitutionalFields();
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const type = String(formData.get('type') ?? 'personal');
+      const name = String(formData.get('name') ?? '').trim();
+      const description = String(formData.get('description') ?? '').trim();
+      const institutionId = String(formData.get('institutionId') ?? '').trim();
+      if (!name) {
+        if (statusBox) {
+          statusBox.textContent = 'El nombre del grupo es obligatorio.';
+        }
+        return;
+      }
+
+      if (type === 'institutional' && !institutionId) {
+        if (statusBox) {
+          statusBox.textContent = 'Seleccioná la institución para el grupo institucional.';
+        }
+        return;
+      }
+
+      try {
+        if (statusBox) {
+          statusBox.textContent = 'Creando grupo...';
+        }
+
+        const payload = {
+          name,
+          ...(description ? { description } : {}),
+          ...(type === 'institutional' && institutionId ? { institutionId } : {}),
+          isPrivate: false,
+          requiresApproval: false,
+        };
+
+        const createdGroup = await api.createGroup(payload);
+
+        const notifications = JSON.parse(localStorage.getItem('meetia-notifications') || '[]');
+        const inviteNotifications = selectedMembers.map((member) => ({
+          title: 'Invitación al grupo',
+          text: `${currentUserName} te invitó a unirte a ${name}.`,
+          memberId: member.id,
+        }));
+        localStorage.setItem('meetia-notifications', JSON.stringify([...inviteNotifications, ...notifications].slice(0, 12)));
+
+        if (statusBox) {
+          statusBox.textContent = 'Grupo creado correctamente.';
+        }
+
+        const groupId = createdGroup?.id || createdGroup?.data?.id;
+        if (groupId) {
+          window.location.href = `/groups/${groupId}`;
+          return;
+        }
+
+        window.location.href = '/groups';
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudo crear el grupo.';
+        if (statusBox) {
+          statusBox.textContent = message;
+        }
+      }
+    });
+  </script>
+</AppLayout>

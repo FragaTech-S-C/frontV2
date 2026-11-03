@@ -1,0 +1,206 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+
+<AppLayout title="Invitaciones">
+  <section class="box">
+    <h2>Solicitudes de amistad</h2>
+    <div id="friend-request-list" class="invite-list"></div>
+  </section>
+
+  <section class="box">
+    <h2>Invitaciones a eventos</h2>
+    <div id="event-invitation-list" class="invite-list"></div>
+  </section>
+
+  <script>
+    import { api } from '@/lib/api';
+
+    const friendRequestList = document.getElementById('friend-request-list');
+    const eventInvitationList = document.getElementById('event-invitation-list');
+    const auth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
+    const currentUserId = auth?.user?.id ?? auth?.id;
+
+    const renderEmptyState = (element: HTMLElement | null, message: string) => {
+      if (!element) return;
+      element.innerHTML = `<p class="empty-state">${message}</p>`;
+    };
+
+    const getUserDisplayName = (user: Record<string, any> = {}) => {
+      if (!user || typeof user !== 'object') return 'Usuario';
+      const firstName = user.firstName || '';
+      const lastName = user.lastName || '';
+      const nickname = user.nickname || '';
+      const email = user.email || '';
+
+      const fullName = `${firstName} ${lastName}`.trim();
+      return fullName || nickname || email || 'Usuario';
+    };
+
+    const bindDecisionButtons = (container: HTMLElement | null) => {
+      if (!container) return;
+
+      container.querySelectorAll('[data-action]').forEach((button: Element) => {
+        button.addEventListener('click', async (event: Event) => {
+          const target = event.currentTarget as HTMLButtonElement | null;
+          const id = target?.dataset.id;
+          const action = target?.dataset.action;
+          const type = target?.dataset.type;
+          const normalizedAction = action === 'accepted' || action === 'rejected' ? action : null;
+
+          if (!id || !currentUserId || !normalizedAction) return;
+
+          try {
+            if (type === 'friend') {
+              await api.respondToFriendRequest(id, normalizedAction, currentUserId);
+            } else {
+              await api.respondToInvitation(id, normalizedAction, currentUserId);
+            }
+
+            await renderFriendRequests();
+            await renderEventInvitations();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'No se pudo responder la invitación.';
+            const statusBox = target.closest('.invite-card')?.querySelector('.invite-status');
+            if (statusBox) {
+              statusBox.textContent = message;
+              statusBox.classList.add('error');
+            }
+          }
+        });
+      });
+    };
+
+    const renderFriendRequests = async () => {
+      if (!friendRequestList) return;
+
+      if (!currentUserId) {
+        renderEmptyState(friendRequestList, 'Iniciá sesión para ver tus solicitudes de amistad.');
+        return;
+      }
+
+      try {
+        const requests = await api.getPendingFriendRequests(currentUserId);
+        const items = Array.isArray(requests) ? requests : [];
+
+        if (!items.length) {
+          renderEmptyState(friendRequestList, 'No tenés solicitudes de amistad pendientes.');
+          return;
+        }
+
+        const markup = items.map((request) => {
+          const sender = request.sender || {};
+          const senderName = getUserDisplayName(sender);
+          const senderEmail = sender.email || 'usuario@email.com';
+
+          return `
+            <div class="invite-card">
+              <div>
+                <strong>${senderName}</strong>
+                <p>${senderEmail}</p>
+                <small>Te envió una solicitud de amistad.</small>
+              </div>
+              <div class="invite-actions">
+                <button class="btn small" type="button" data-type="friend" data-id="${request.id}" data-action="accepted">Aceptar</button>
+                <button class="btn small out" type="button" data-type="friend" data-id="${request.id}" data-action="rejected">Rechazar</button>
+              </div>
+              <div class="invite-status"></div>
+            </div>
+          `;
+        }).join('');
+
+        friendRequestList.innerHTML = markup;
+        bindDecisionButtons(friendRequestList);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudieron cargar las solicitudes de amistad.';
+        renderEmptyState(friendRequestList, message);
+      }
+    };
+
+    const renderEventInvitations = async () => {
+      if (!eventInvitationList) return;
+
+      if (!currentUserId) {
+        renderEmptyState(eventInvitationList, 'Iniciá sesión para ver tus invitaciones.');
+        return;
+      }
+
+      try {
+        const invitations = await api.getInvitations(currentUserId);
+        const items = Array.isArray(invitations) ? invitations.filter((item) => item.type !== 'friend') : [];
+
+        if (!items.length) {
+          renderEmptyState(eventInvitationList, 'No tenés invitaciones pendientes.');
+          return;
+        }
+
+        const markup = items.map((invitation) => {
+          const title = invitation.title || (invitation.type === 'event' ? 'Invitación a evento' : 'Invitación a grupo');
+          const description = invitation.message || invitation.text || 'Te invitaron a participar.';
+
+          return `
+            <div class="invite-card">
+              <div>
+                <strong>${title}</strong>
+                <p>${description}</p>
+              </div>
+              <div class="invite-actions">
+                <button class="btn small" type="button" data-type="event" data-id="${invitation.id}" data-action="accepted">Aceptar</button>
+                <button class="btn small out" type="button" data-type="event" data-id="${invitation.id}" data-action="rejected">Rechazar</button>
+              </div>
+              <div class="invite-status"></div>
+            </div>
+          `;
+        }).join('');
+
+        eventInvitationList.innerHTML = markup;
+        bindDecisionButtons(eventInvitationList);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudieron cargar las invitaciones.';
+        renderEmptyState(eventInvitationList, message);
+      }
+    };
+
+    renderFriendRequests();
+    renderEventInvitations();
+  </script>
+
+  <style>
+    .invite-list {
+      display: grid;
+      gap: 0.85rem;
+      margin-top: 1rem;
+    }
+
+    .invite-card {
+      display: grid;
+      gap: 0.65rem;
+      padding: 0.9rem 1rem;
+      border: 1px solid #dfe4ee;
+      border-radius: 12px;
+      background: #f8fafc;
+    }
+
+    .invite-card p, .invite-card small {
+      margin: 0.2rem 0 0;
+      color: #4f5c6d;
+    }
+
+    .invite-actions {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .invite-status {
+      min-height: 1.2rem;
+      color: #b42318;
+      font-size: 0.82rem;
+    }
+
+    .empty-state {
+      margin: 0;
+      color: #4f5c6d;
+    }
+  </style>
+</AppLayout>

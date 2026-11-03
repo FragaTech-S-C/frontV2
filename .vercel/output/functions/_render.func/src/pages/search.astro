@@ -1,0 +1,134 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import { api, getApiBaseUrl } from '@/lib/api';
+---
+<AppLayout title="Buscar eventos">
+  <form id="search-form" class="row">
+    <input id="search-input" class="grow" type="search" aria-label="Buscar" placeholder="Metabuscador de eventos" />
+    <button class="btn" type="submit">Buscar</button>
+  </form>
+  <div class="row">
+    <button class="btn out" type="button">Categoría</button><button class="btn out" type="button">Fecha</button><button class="btn out" type="button">Cerca de mí</button>
+  </div>
+  <div id="search-status" class="box" style="margin-bottom:1rem;display:none"></div>
+  <div id="search-results" class="grid"></div>
+
+  <script is:inline define:vars={{ apiBase: (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '') }}>
+    const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
+    if (!baseApiUrl) {
+      const status = document.getElementById('search-status');
+      if (status) {
+        status.style.display = 'block';
+        status.textContent = 'La API no está configurada. Agregá PUBLIC_API_URL o BACKEND_URL en tu entorno.';
+      }
+      return;
+    }
+    const token = localStorage.getItem('meetia-access-token');
+    const form = document.getElementById('search-form');
+    const input = document.getElementById('search-input');
+    const results = document.getElementById('search-results');
+    const status = document.getElementById('search-status');
+
+    const formatArgentinaDate = (value) => {
+      if (!value) return 'Sin fecha';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'Sin fecha';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    };
+
+    const formatLocation = (event) => {
+      const parts = [event.location, event.city, event.country, event.address].filter(Boolean);
+      return parts.length ? parts.join(' - ') : 'Sin ubicación';
+    };
+
+    const renderResults = (items) => {
+      if (!results) return;
+      results.innerHTML = '';
+
+      if (!items || items.length === 0) {
+        status.style.display = 'block';
+        status.textContent = 'No se encontraron resultados.';
+        return;
+      }
+
+      const mapped = items.map((entry) => entry.event || entry);
+
+      const slugify = (value) => String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'evento';
+
+      mapped.forEach((event) => {
+        const card = document.createElement('a');
+        const eventId = event.id ?? event._id;
+        const pathTitle = slugify(event.title || event.name || 'evento') || 'evento';
+        const eventPath = eventId ? `/events/${pathTitle}?id=${encodeURIComponent(String(eventId))}` : `/events/${pathTitle}`;
+        card.href = eventPath;
+        card.className = 'box';
+        card.setAttribute('data-event-id', String(eventId ?? ''));
+        card.style.textDecoration = 'none';
+        card.style.color = 'inherit';
+        const imageUrl = event.coverImage || event.bannerImage;
+        card.innerHTML = `
+          ${imageUrl ? `<img src="${imageUrl}" alt="${event.title || 'Evento'}" style="width:100%;height:180px;object-fit:cover;border-radius:12px;display:block;" />` : '<div class="ph">Evento</div>'}
+          <h3>${event.title || 'Evento sin título'}</h3>
+          <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
+        `;
+        card.addEventListener('click', async (clickEvent) => {
+          if (!eventId) return;
+          clickEvent.preventDefault();
+          try {
+            await fetch(`${baseApiUrl}/events/${encodeURIComponent(String(eventId))}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            window.location.href = eventPath;
+          } catch (error) {
+            console.error('No se pudo cargar el evento:', error);
+            window.location.href = eventPath;
+          }
+        });
+        results.appendChild(card);
+      });
+    };
+
+    const loadSearch = async (query) => {
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      status.style.display = 'block';
+      status.textContent = 'Buscando eventos...';
+
+      try {
+        const url = `${baseApiUrl}/search?q=${encodeURIComponent(query || 'evento')}&limit=6`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => []);
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'La búsqueda falló.');
+        }
+
+        renderResults(Array.isArray(payload) ? payload : payload.events || []);
+        status.style.display = 'none';
+      } catch (error) {
+        status.style.display = 'block';
+        status.textContent = error.message || 'No se pudo completar la búsqueda.';
+      }
+    };
+
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      loadSearch(input.value.trim());
+    });
+
+    loadSearch('evento');
+  </script>
+</AppLayout>

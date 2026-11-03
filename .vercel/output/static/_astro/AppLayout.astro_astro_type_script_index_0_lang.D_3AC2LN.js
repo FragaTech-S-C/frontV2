@@ -1,0 +1,1 @@
+import{a as t,c as e}from"./api.Dxlh498E.js";const a=document.getElementById("logout-button");a?.addEventListener("click",async()=>{try{await t.logout()}catch(o){console.warn("Logout request failed:",o)}finally{e(),window.location.href="/login"}});

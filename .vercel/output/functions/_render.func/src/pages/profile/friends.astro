@@ -1,0 +1,118 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+
+<AppLayout title="Amigos">
+  <form id="friend-form" class="row">
+    <input id="friend-email" class="grow" aria-label="Añadir amigo" placeholder="Buscar por email" />
+    <button class="btn" type="submit" id="add-friend-submit">Añadir amigo</button>
+  </form>
+
+  <div id="friend-status" class="box" style="display:none; margin-bottom:1rem;"></div>
+
+  <div class="box">
+    <h3>Amigos</h3>
+    <div id="friends-list"></div>
+  </div>
+
+  <script>
+import { api } from "@/lib/api";
+
+    const form = document.getElementById('friend-form') as HTMLFormElement | null;
+    console.log(form);
+    const friendInput = document.getElementById('friend-email') as HTMLInputElement | null;
+    console.log(friendInput)
+    const friendsList = document.getElementById('friends-list') as HTMLDivElement | null;
+    const friendStatus = document.getElementById('friend-status') as HTMLDivElement | null;
+    // const addFriend = (document.getElementById('add-friend-submit') as HTMLButtonElement).addEventListener('onclick')
+    const currentAuth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
+    console.log(currentAuth)
+    const currentUserId = currentAuth?.user.id ?? currentAuth?.id;
+
+    const setStatus = (message: string, isError = false) => {
+      if (!friendStatus) return;
+      friendStatus.style.display = 'block';
+      friendStatus.textContent = message;
+      friendStatus.style.color = isError ? '#d93025' : '#1d6f42';
+    };
+
+    const renderFriends = async () => {
+      if (!friendsList) return;
+
+      if (!currentUserId) {
+        friendsList.innerHTML = '<p>Necesitás iniciar sesión para ver tus amigos.</p>';
+        return;
+      }
+
+      try {
+        const friendships = await api.getFriends(currentUserId);
+        const friends = (Array.isArray(friendships) ? friendships : []).map((friendship) => {
+          const isSender = friendship.senderId === currentUserId;
+          const friend = isSender ? friendship.receiver : friendship.sender;
+          return {
+            ...friend,
+            friendshipId: friendship.id,
+          };
+        });
+
+        if (!friends.length) {
+          friendsList.innerHTML = '<p>No tenés amigos todavía.</p>';
+          return;
+        }
+
+        friendsList.innerHTML = friends.map((friend) => `
+          <div class="row friend-row">
+            <span class="grow">${friend.firstName || friend.nickname || friend.email || 'Amigo'}</span>
+            <button class="btn out" type="button" data-id="${friend.friendshipId}">Eliminar</button>
+          </div>
+        `).join('');
+
+        friendsList.querySelectorAll('[data-id]').forEach((button: Element) => {
+          button.addEventListener('click', async () => {
+            const friendshipId = (button as HTMLElement).dataset.id;
+            if (!friendshipId) return;
+            try {
+              await api.removeFriend(friendshipId, currentUserId);
+              await renderFriends();
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'No se pudo eliminar.';
+              setStatus(message, true);
+            }
+          });
+        });
+      } catch (error) {
+        friendsList.innerHTML = '<p>No se pudieron cargar tus amigos.</p>';
+        const message = error instanceof Error ? error.message : 'No se pudieron cargar tus amigos.';
+        setStatus(message, true);
+      }
+    };
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const value = String(friendInput?.value || '').trim();
+      if (!value || !currentUserId) return;
+
+      try {
+        setStatus('Buscando usuario...');
+
+        const matches = await api.searchUsersByEmail(value);
+        const match = Array.isArray(matches) ? matches.find((user) => user.email?.toLowerCase() === value.toLowerCase()) : null;
+
+        if (!match) {
+          setStatus('No existe un usuario con ese email.', true);
+          return;
+        }
+
+        await api.addFriend(currentUserId, match.email);
+        if (friendInput) friendInput.value = '';
+        setStatus(`Solicitud enviada a ${match.email}.`);
+        await renderFriends();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudo enviar la solicitud.';
+        setStatus(message, true);
+      }
+    });
+
+    renderFriends();
+  </script>
+</AppLayout>
