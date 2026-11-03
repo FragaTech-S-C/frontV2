@@ -1,281 +1,159 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-
-export function getStaticPaths() {
-  return [
-    { params: { id: 'las-girls' } },
-    { params: { id: 'tech-crew' } },
-    { params: { id: 'design-lab' } },
-    { params: { id: '1' } },
-    { params: { id: '2' } },
-  ];
-}
+export function getStaticPaths() { return [{ params: { id: '_' } }]; }
+const { id } = Astro.params;
 ---
-
 <AppLayout title="Grupo">
-  <div id="group-shell"></div>
+  <div id="group-status" class="box" style="display:none;"></div>
+  <div id="group-shell" style="display:none;"></div>
+</AppLayout>
 
-  <script>
-    (() => {
-      const shell = document.getElementById('group-shell');
+<script>
+  import { api, getStoredAuth } from '@/lib/api';
+  const groupId = window.location.pathname.split('/').filter(Boolean)[1];
+
+  const statusEl = document.getElementById('group-status');
+  const shell = document.getElementById('group-shell');
+
+  const show = (msg) => { if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = msg; } };
+  const hide = () => { if (statusEl) statusEl.style.display = 'none'; };
+
+  const formatDate = (v) => {
+    if (!v) return 'Sin fecha';
+    const d = new Date(v);
+    if (isNaN(d)) return 'Sin fecha';
+    return new Intl.DateTimeFormat('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }).format(d);
+  };
+
+  const currentUser = () => {
+    const a = getStoredAuth();
+    return a?.user ?? a ?? null;
+  };
+
+  const load = async () => {
+    show('Cargando grupo...');
+    try {
+      const group = await api.getGroupById(groupId);
+      hide();
       if (!shell) return;
+      shell.style.display = 'block';
 
-      const currentPath = window.location.pathname.split('/').filter(Boolean).pop();
-      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
-      const slugify = (value = '') => String(value)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'grupo';
+      const user = currentUser();
+      const isOwner = user && (group.ownerId === (user.id ?? user._id));
 
-      const group = groups.find((item) => String(item.slug || slugify(item.name || '')) === String(currentPath))
-        || groups.find((item) => String(item.id) === String(currentPath));
+      const coverHTML = group.coverImage
+        ? `<img src="${group.coverImage}" alt="${group.name}" style="display:block;width:100%;max-height:240px;object-fit:cover;" />`
+        : `<div style="width:100%;height:160px;background:linear-gradient(135deg,#eaf0ff,#eefbf6);display:grid;place-items:center;font-weight:700;font-size:1.1rem;color:#4b5b9d;text-transform:uppercase;letter-spacing:0.08em;">Portada del grupo</div>`;
 
-      const defaultMembers = ['Yo', 'Ana', 'Mateo'];
-      const defaultEvents = [
-        { id: 'event-demo-1', title: 'Meetup de comunidad', startDate: '2026-10-18T19:00:00.000Z', location: 'CABA', country: 'Argentina' },
-        { id: 'event-demo-2', title: 'Workshop de diseño', startDate: '2026-10-25T18:30:00.000Z', location: 'Palermo', country: 'Argentina' },
-      ];
+      const avatarHTML = group.avatar
+        ? `<img src="${group.avatar}" alt="${group.name}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;" />`
+        : `<div style="width:72px;height:72px;border-radius:50%;background:#dfe6ff;color:#2f5d8a;font-weight:700;font-size:1.5rem;display:grid;place-items:center;">${(group.name ?? 'G').charAt(0).toUpperCase()}</div>`;
 
-      const members = Array.isArray(group?.members) && group.members.length ? group.members : defaultMembers;
-      const events = Array.isArray(group?.events) && group.events.length ? group.events : defaultEvents;
+      const members = Array.isArray(group.members) ? group.members : [];
+      const events = Array.isArray(group.events) ? group.events : [];
+      const memberCount = group._count?.members ?? members.length;
 
-      const cover = group?.coverImage
-        ? `<img src="${group.coverImage}" alt="${group.name || 'Grupo'}" class="group-cover" />`
-        : '<div class="group-cover placeholder">Portada del grupo</div>';
-
-      const avatar = group?.avatar
-        ? `<img src="${group.avatar}" alt="${group.name || 'Grupo'}" class="group-avatar" />`
-        : `<div class="group-avatar letter">${(group?.name || 'G').charAt(0).toUpperCase()}</div>`;
-
-      const memberList = members.map((member) => `<div class="member-pill">${member}</div>`).join('');
-
-      const eventList = events.map((event) => {
-        const date = event.startDate ? new Date(event.startDate) : null;
-        const formattedDate = date && !Number.isNaN(date.getTime())
-          ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
-          : 'Sin fecha';
-
-        return `
-          <article class="mini-event">
-            <div class="mini-event__thumb">${event.category || 'Evento'}</div>
-            <div>
-              <strong>${event.title || 'Evento sin título'}</strong>
-              <p>${formattedDate}</p>
-              <p>${event.location || event.city || 'Sin ubicación'}</p>
-            </div>
-          </article>
-        `;
+      const memberPills = members.slice(0, 12).map((m) => {
+        const name = `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || m.email || m.id;
+        return `<div style="padding:0.4rem 0.75rem;border-radius:999px;background:#eef2ff;color:#3749b8;font-size:0.85rem;font-weight:600;">${name}</div>`;
       }).join('');
 
+      const eventCards = events.slice(0, 6).map((ev) => `
+        <article style="display:flex;gap:0.75rem;align-items:center;padding:0.6rem;border:1px solid #e5e7eb;border-radius:12px;background:#fafafa;">
+          <div style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,#dbeafe,#e0e7ff);display:grid;place-items:center;font-size:0.65rem;font-weight:700;text-transform:uppercase;color:#3b4fb5;flex-shrink:0;">${ev.category ?? 'EVT'}</div>
+          <div>
+            <a href="/events/${ev.id}" style="font-weight:600;color:#111827;text-decoration:none;">${ev.title ?? 'Evento'}</a>
+            <p style="margin:0.2rem 0 0;font-size:0.82rem;color:#4b5563;">${formatDate(ev.startDate)}</p>
+          </div>
+        </article>
+      `).join('');
+
       shell.innerHTML = `
-        <section class="box group-header">
-          ${cover}
-          <div class="group-summary">
-            <div class="group-title-row">
-              ${avatar}
+        <section class="box" style="overflow:hidden;padding:0;">
+          ${coverHTML}
+          <div style="padding:1.25rem;">
+            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;">
+              ${avatarHTML}
               <div>
-                <h2>${group?.name || 'Grupo sin nombre'}</h2>
-                <p>${group?.type === 'institutional' ? 'Grupo institucional' : 'Grupo personal'} · ${group?.leader || 'Líder'}</p>
+                <h2 style="margin:0 0 0.25rem;font-size:1.5rem;">${group.name ?? 'Grupo'}</h2>
+                <p style="margin:0;color:#4b5563;font-size:0.9rem;">${group.isPrivate ? 'Privado' : 'Público'} · ${memberCount} miembro${memberCount !== 1 ? 's' : ''}</p>
               </div>
             </div>
-            <p>${group?.description || 'Sin descripción aún.'}</p>
+            ${group.description ? `<p style="color:#374151;margin-bottom:1rem;">${group.description}</p>` : ''}
             <div class="row">
-              <a class="btn" href="/events/new">Crear evento</a>
-              <button class="btn out" type="button">Invitar miembro</button>
+              <a class="btn" href="/events/new">+ Crear evento</a>
+              ${!isOwner ? `<button class="btn out" id="join-btn" type="button">Unirse al grupo</button>` : ''}
+              ${isOwner ? `<a class="btn out" id="edit-group-btn" href="#">Editar grupo</a>` : ''}
+              ${isOwner ? `<button class="btn out" id="delete-group-btn" type="button" style="border-color:#ef4444;color:#ef4444;">Eliminar</button>` : ''}
             </div>
           </div>
         </section>
 
-        <div class="group-grid">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-top:1rem;">
           <section class="box">
-            <h3>Administrar grupo</h3>
-            <div class="status-row">
-              <span>Miembros</span>
-              <strong>${members.length}</strong>
-            </div>
-            <div class="status-row">
-              <span>Privacidad</span>
-              <strong>${group?.type === 'institutional' ? 'Institucional' : 'Personal'}</strong>
-            </div>
-            <div class="status-row">
-              <span>Estado</span>
-              <strong>Activo</strong>
-            </div>
+            <h3>Información</h3>
+            <div style="display:flex;justify-content:space-between;padding:0.6rem 0;border-bottom:1px solid #e5e7eb;"><span>Miembros</span><strong>${memberCount}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:0.6rem 0;border-bottom:1px solid #e5e7eb;"><span>Privacidad</span><strong>${group.isPrivate ? 'Privado' : 'Público'}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:0.6rem 0;"><span>Requiere aprobación</span><strong>${group.requiresApproval ? 'Sí' : 'No'}</strong></div>
           </section>
 
           <section class="box">
-            <h3>Crear nuevo evento</h3>
-            <p>Prepará una nueva actividad para este grupo.</p>
-            <a class="btn" href="/events/new">Ir al formulario</a>
+            <h3>Miembros (${memberCount})</h3>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;">${memberPills || '<p class="muted">Sin miembros listados.</p>'}</div>
           </section>
 
           <section class="box">
-            <h3>Miembros</h3>
-            <div class="member-list">${memberList || '<p>No hay miembros aún.</p>'}</div>
-            <button class="btn out" type="button">Gestionar miembros</button>
-          </section>
-
-          <section class="box chat-box">
             <h3>Chat del grupo</h3>
-            <p>Próximamente: chat interno del grupo.</p>
-            <div class="chat-placeholder">Chat en construcción</div>
-          </section>
-
-          <section class="box events-box">
-            <h3>Eventos del grupo</h3>
-            <div class="mini-event-list">${eventList || '<p>No hay eventos creados.</p>'}</div>
+            <p class="muted">Próximamente: mensajería interna del grupo.</p>
+            <div style="margin-top:1rem;min-height:100px;border:1px dashed #bac5dd;border-radius:10px;display:grid;place-items:center;color:#64748b;font-size:0.9rem;">Chat en construcción</div>
           </section>
         </div>
+
+        <section class="box" style="margin-top:1rem;">
+          <h3>Eventos del grupo</h3>
+          <div style="display:grid;gap:0.75rem;margin-top:0.75rem;">${eventCards || '<p class="muted">No hay eventos en este grupo.</p>'}</div>
+        </section>
+        <p id="action-status" class="muted" style="margin-top:0.5rem;"></p>
       `;
-    })();
-  </script>
 
-  <style>
-    .group-header {
-      overflow: hidden;
-      padding: 0;
-    }
+      // Bind join button
+      const joinBtn = document.getElementById('join-btn');
+      joinBtn?.addEventListener('click', async () => {
+        joinBtn.disabled = true;
+        try {
+          await api.joinGroup(groupId);
+          joinBtn.textContent = '✔ Solicitud enviada / Unido';
+        } catch (e) {
+          const as = document.getElementById('action-status');
+          if (as) as.textContent = e instanceof Error ? e.message : 'No se pudo unirse.';
+          joinBtn.disabled = false;
+        }
+      });
 
-    .group-cover {
-      display: block;
-      width: 100%;
-      height: 220px;
-      object-fit: cover;
-      background: #dfe7ff;
-    }
+      // Edit group link
+      const editBtn = document.getElementById('edit-group-btn');
+      // (edit page not yet created — just point to groups page for now)
+      if (editBtn) editBtn.href = `/groups`;
 
-    .group-cover.placeholder {
-      display: grid;
-      place-items: center;
-      background: linear-gradient(135deg, #eaf0ff, #eefbf6);
-      color: #4b5b9d;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
+      // Delete group
+      const deleteBtn = document.getElementById('delete-group-btn');
+      deleteBtn?.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar el grupo? Esta acción no se puede deshacer.')) return;
+        deleteBtn.disabled = true;
+        try {
+          await api.deleteGroup(groupId);
+          window.location.href = '/groups';
+        } catch (e) {
+          const as = document.getElementById('action-status');
+          if (as) as.textContent = e instanceof Error ? e.message : 'No se pudo eliminar.';
+          deleteBtn.disabled = false;
+        }
+      });
 
-    .group-summary {
-      padding: 1.25rem 1.25rem 1.4rem;
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'No se pudo cargar el grupo.');
     }
+  };
 
-    .group-title-row {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .group-avatar {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      object-fit: cover;
-      background: #e6e7ff;
-      display: block;
-    }
-
-    .group-avatar.letter {
-      display: grid;
-      place-items: center;
-      background: #dfe6ff;
-      color: #2f5d8a;
-      font-weight: 700;
-      font-size: 1.5rem;
-    }
-
-    .group-summary h2 {
-      margin: 0 0 0.25rem;
-      font-size: 1.6rem;
-    }
-
-    .group-summary p {
-      color: #4b5563;
-    }
-
-    .group-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1rem;
-      margin-top: 1.25rem;
-    }
-
-    .status-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.7rem 0;
-      border-bottom: 1px solid #e5e7eb;
-      color: #374151;
-    }
-
-    .member-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin: 0.75rem 0 1rem;
-    }
-
-    .member-pill {
-      border-radius: 999px;
-      background: #eef2ff;
-      color: #3749b8;
-      padding: 0.45rem 0.75rem;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-
-    .chat-placeholder {
-      margin-top: 1rem;
-      min-height: 130px;
-      border: 1px dashed #bac5dd;
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      background: #f8fafc;
-      color: #64748b;
-      font-weight: 600;
-    }
-
-    .mini-event-list {
-      display: grid;
-      gap: 0.75rem;
-      margin-top: 0.75rem;
-    }
-
-    .mini-event {
-      display: flex;
-      gap: 0.8rem;
-      align-items: center;
-      padding: 0.6rem;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      background: #fafafa;
-    }
-
-    .mini-event__thumb {
-      width: 54px;
-      height: 54px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #dbeafe, #e0e7ff);
-      display: grid;
-      place-items: center;
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: #3b4fb5;
-      flex-shrink: 0;
-    }
-
-    .mini-event strong {
-      display: block;
-      margin-bottom: 0.2rem;
-    }
-
-    .mini-event p {
-      margin: 0;
-      color: #4b5563;
-      font-size: 0.82rem;
-    }
-  </style>
-</AppLayout>
+  load();
+</script>

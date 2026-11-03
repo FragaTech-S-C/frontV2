@@ -3,143 +3,98 @@ import AppLayout from '@/layouts/AppLayout.astro';
 ---
 <AppLayout title="Nuevo grupo">
   <form id="group-form" class="box">
-    <label>Nombre<input name="name" required /></label>
-    <label>Descripción<textarea name="description" rows="4"></textarea></label>
+    <label>Nombre <span style="color:#b91c1c">*</span><input name="name" required /></label>
+    <label>Descripción<textarea name="description" rows="3"></textarea></label>
 
     <div class="row">
-      <label class="grow">Tipo
-        <select name="type">
-          <option value="personal">Personal</option>
-          <option value="institutional">Institucional</option>
+      <label class="grow">¿Es privado?
+        <select name="isPrivate">
+          <option value="false">No (público)</option>
+          <option value="true">Sí (privado)</option>
         </select>
       </label>
-      <!-- <label class="grow">Líder<input name="leader" value="Yo" readonly /></label> -->
-    </div>
-
-    <div id="group-institutional-fields" style="display:none;">
-      <label>Institución asociada
-        <select name="institutionId">
-          <option value="">Seleccioná una institución</option>
-          <option value="inst-1">Universidad del Este</option>
-          <option value="inst-2">Fundación Innovar</option>
-          <option value="inst-3">Museo de Arte</option>
+      <label class="grow">¿Requiere aprobación?
+        <select name="requiresApproval">
+          <option value="false">No</option>
+          <option value="true">Sí</option>
         </select>
       </label>
     </div>
 
-    <label>Imagen del grupo<input type="file" name="avatar" accept="image/*" /></label>
-    <label>Portada del grupo<input type="file" name="coverImage" accept="image/*" /></label>
+    <label>Institución asociada (opcional)
+      <select name="institutionId" id="institution-select">
+        <option value="">Sin institución</option>
+      </select>
+    </label>
+
+    <label>URL de imagen del grupo (opcional)<input type="url" name="avatar" placeholder="https://..." /></label>
+    <label>URL de portada del grupo (opcional)<input type="url" name="coverImage" placeholder="https://..." /></label>
 
     <div class="row">
       <button class="btn" type="submit">Crear grupo</button>
       <a class="btn out" href="/groups">Cancelar</a>
     </div>
-    <p id="group-status" aria-live="polite"></p>
+    <p id="group-status" aria-live="polite" class="muted"></p>
   </form>
-
-  <script>
-    const form = document.getElementById('group-form') as HTMLFormElement;
-    const statusBox = document.getElementById('group-status');
-    const typeField = form?.querySelector('select[name="type"]');
-    const institutionalFields = document.getElementById('group-institutional-fields');
-    const leaderInput = form?.querySelector('input[name="leader"]') as HTMLInputElement | null;
-
-    let storedUser: Record<string, any> = {};
-    try {
-      storedUser = JSON.parse(localStorage.getItem('meetia-auth') || '{}') as Record<string, any>;
-    } catch {
-      storedUser = {};
-    }
-
-    const currentUserId = storedUser?.user?.id ?? storedUser?.id ?? storedUser?.userId ?? localStorage.getItem('meetia-user-id') ?? 'local-user';
-    const currentUserName = storedUser?.user?.name ?? storedUser?.name ?? storedUser?.fullName ?? 'Yo';
-
-    if (leaderInput) {
-      leaderInput.value = currentUserName;
-    }
-
-    const toggleInstitutionalFields = () => {
-      const isInstitutional = String(typeField ?? 'personal') === 'institutional';
-      if (institutionalFields) {
-        institutionalFields.style.display = isInstitutional ? 'block' : 'none';
-      }
-    };
-
-    const readFile = (file: File) => {
-      if (!file) return Promise.resolve(undefined);
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-        reader.readAsDataURL(file);
-      });
-    };
-
-    const slugify = (value: string) =>
-      value
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'grupo';
-
-    typeField?.addEventListener('change', toggleInstitutionalFields);
-    toggleInstitutionalFields();
-
-    form?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const formData = new FormData(form);
-      const type = String(formData.get('type') ?? 'personal');
-      const name = String(formData.get('name') ?? '').trim();
-      const description = String(formData.get('description') ?? '').trim();
-      const institutionId = String(formData.get('institutionId') ?? '').trim();
-      const avatarFile = formData.get('avatar');
-      const coverImageFile = formData.get('coverImage');
-
-      if (!name) {
-        if (statusBox) {
-          statusBox.textContent = 'El nombre del grupo es obligatorio.';
-        }
-        return;
-      }
-
-      if (type === 'institutional' && !institutionId) {
-        if (statusBox) {
-          statusBox.textContent = 'Seleccioná la institución para el grupo institucional.';
-        }
-        return;
-      }
-
-      const avatar = avatarFile && avatarFile instanceof File ? await readFile(avatarFile) : undefined;
-      const coverImage = coverImageFile && coverImageFile instanceof File ? await readFile(coverImageFile) : undefined;
-      const groups: Array<Record<string, any>> = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
-      const baseSlug = slugify(name);
-      const usedSlugs = new Set((groups || []).map((item: Record<string, any>) => String(item.slug || slugify(item.name || '')).toLowerCase()));
-      let slug = baseSlug;
-      let counter = 2;
-
-      while (usedSlugs.has(slug)) {
-        slug = `${baseSlug}-${counter}`;
-        counter += 1;
-      }
-
-      const nextGroup = {
-        id: String(Date.now()),
-        slug,
-        name,
-        description,
-        type,
-        institutionId: type === 'institutional' ? institutionId : undefined,
-        ownerId: currentUserId,
-        leader: currentUserName,
-        leader_user_id: currentUserId,
-        avatar,
-        coverImage,
-        createdAt: new Date().toISOString(),
-      };
-
-      localStorage.setItem('meetia-groups', JSON.stringify([...groups, nextGroup]));
-      window.location.href = `/groups/${slug}`;
-    });
-  </script>
 </AppLayout>
+
+<script>
+  import { api } from '@/lib/api';
+
+  const form = document.getElementById('group-form') as HTMLFormElement | null;
+  const statusEl = document.getElementById('group-status');
+  const institutionSelect = document.getElementById('institution-select') as HTMLSelectElement | null;
+
+  // Load institutions for the dropdown
+  const loadInstitutions = async () => {
+    try {
+      const data = await api.getInstitutions();
+      const items = Array.isArray(data) ? data : (data?.institutions ?? data?.data ?? []);
+      items.forEach((inst) => {
+        const opt = document.createElement('option');
+        opt.value = inst.id;
+        opt.textContent = inst.name;
+        institutionSelect?.appendChild(opt);
+      });
+    } catch {
+      // Not critical — institutions list is optional
+    }
+  };
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const name = String(fd.get('name') ?? '').trim();
+
+    if (!name) {
+      if (statusEl) statusEl.textContent = 'El nombre del grupo es obligatorio.';
+      return;
+    }
+
+    if (statusEl) statusEl.textContent = 'Creando grupo...';
+
+    const payload = {
+      name,
+      description: String(fd.get('description') ?? '').trim() || undefined,
+      isPrivate: fd.get('isPrivate') === 'true',
+      requiresApproval: fd.get('requiresApproval') === 'true',
+      institutionId: String(fd.get('institutionId') ?? '').trim() || undefined,
+      avatar: String(fd.get('avatar') ?? '').trim() || undefined,
+      coverImage: String(fd.get('coverImage') ?? '').trim() || undefined,
+    };
+
+    try {
+      const group = await api.createGroup(payload);
+      const groupId = group?.id ?? group?.group?.id;
+      if (groupId) {
+        window.location.href = `/groups/${groupId}`;
+      } else {
+        window.location.href = '/groups';
+      }
+    } catch (err) {
+      if (statusEl) statusEl.textContent = err instanceof Error ? err.message : 'No se pudo crear el grupo.';
+    }
+  });
+
+  loadInstitutions();
+</script>

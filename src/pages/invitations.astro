@@ -2,8 +2,111 @@
 import AppLayout from '@/layouts/AppLayout.astro';
 ---
 <AppLayout title="Invitaciones">
-  <div class="box">
-    <div class="row"><span class="grow">Invitación a evento o grupo</span><button class="btn">Aceptar</button><button class="btn out">Rechazar</button></div>
-    <div class="row"><span class="grow">Invitación a evento o grupo</span><button class="btn">Aceptar</button><button class="btn out">Rechazar</button></div>
-  </div>
+  <div id="inv-status" class="box" style="display:none;"></div>
+  <div id="inv-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+  <p id="inv-empty" class="muted" style="display:none;">No tenés invitaciones pendientes.</p>
 </AppLayout>
+
+<script>
+  import { api, getStoredAuth } from '@/lib/api';
+
+  const statusEl = document.getElementById('inv-status');
+  const listEl = document.getElementById('inv-list');
+  const emptyEl = document.getElementById('inv-empty');
+
+  const show = (msg) => {
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = msg; }
+  };
+  const hide = () => { if (statusEl) statusEl.style.display = 'none'; };
+
+  const currentUserId = () => {
+    const auth = getStoredAuth();
+    return auth?.user?.id ?? auth?.id ?? auth?.userId ?? null;
+  };
+
+  const typeLabel = (type) => {
+    const map = { group: 'Grupo', event: 'Evento', friend: 'Amistad' };
+    return map[type] ?? type ?? 'Invitación';
+  };
+
+  const renderInvitations = (items) => {
+    if (!listEl || !emptyEl) return;
+    listEl.innerHTML = '';
+
+    const pending = items.filter((inv) => !inv.status || inv.status === 'PENDING');
+
+    if (!pending.length) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+
+    emptyEl.style.display = 'none';
+
+    pending.forEach((inv) => {
+      const card = document.createElement('div');
+      card.className = 'box';
+      card.dataset.id = String(inv.id);
+
+      const name = inv.event?.title ?? inv.group?.name ?? inv.sender?.email ?? inv.message ?? 'Invitación';
+      const type = typeLabel(inv.type);
+
+      card.innerHTML = `
+        <div class="row">
+          <div class="grow">
+            <strong>${name}</strong>
+            <p class="muted" style="margin-top:0.2rem;">${type}</p>
+          </div>
+          <button class="btn accept-btn" type="button" data-id="${inv.id}">Aceptar</button>
+          <button class="btn out reject-btn" type="button" data-id="${inv.id}">Rechazar</button>
+        </div>
+      `;
+      listEl.appendChild(card);
+    });
+
+    // Bind buttons
+    listEl.querySelectorAll('.accept-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const invId = btn.dataset.id;
+        btn.disabled = true;
+        try {
+          await api.acceptInvitation(invId, currentUserId());
+          btn.closest('.box')?.remove();
+          if (!listEl.querySelector('.box')) emptyEl.style.display = 'block';
+        } catch (e) {
+          alert(e instanceof Error ? e.message : 'No se pudo aceptar.');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    listEl.querySelectorAll('.reject-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const invId = btn.dataset.id;
+        btn.disabled = true;
+        try {
+          await api.rejectInvitation(invId, currentUserId());
+          btn.closest('.box')?.remove();
+          if (!listEl.querySelector('.box')) emptyEl.style.display = 'block';
+        } catch (e) {
+          alert(e instanceof Error ? e.message : 'No se pudo rechazar.');
+          btn.disabled = false;
+        }
+      });
+    });
+  };
+
+  const load = async () => {
+    show('Cargando invitaciones...');
+    try {
+      const userId = currentUserId();
+      const data = await api.getInvitations(userId);
+      hide();
+      const items = Array.isArray(data) ? data : (data?.invitations ?? data?.data ?? []);
+      renderInvitations(items);
+    } catch (e) {
+      show(e instanceof Error ? e.message : 'No se pudieron cargar las invitaciones.');
+    }
+  };
+
+  load();
+</script>

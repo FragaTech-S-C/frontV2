@@ -2,93 +2,97 @@
 import AppLayout from '@/layouts/AppLayout.astro';
 ---
 <AppLayout title="Sugeridos para vos">
-  <p>Eventos según tus intereses.</p>
-  <div id="recommendations-status" class="box" style="margin-bottom:1rem;display:none"></div>
-  <div id="recommendations-grid" class="grid"></div>
+  <p class="muted">Eventos recomendados según tus intereses y actividad.</p>
 
-  <script is:inline define:vars={{ apiBase: (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '') }}>
-    const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
-    if (!baseApiUrl) {
-      const status = document.getElementById('recommendations-status');
-      if (status) {
-        status.style.display = 'block';
-        status.textContent = 'La API no está configurada. Agregá PUBLIC_API_URL o BACKEND_URL en tu entorno.';
-      }
+  <div id="rec-status" class="box" style="display:none;"></div>
+  <div id="rec-grid" class="grid"></div>
+  <p id="rec-empty" class="muted" style="display:none;">Todavía no tenemos recomendaciones personalizadas para vos. Explorá más eventos primero.</p>
+</AppLayout>
+
+<script>
+  import { api } from '@/lib/api';
+
+  const statusEl = document.getElementById('rec-status');
+  const grid = document.getElementById('rec-grid');
+  const empty = document.getElementById('rec-empty');
+
+  const show = (msg) => { if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = msg; } };
+  const hide = () => { if (statusEl) statusEl.style.display = 'none'; };
+
+  const formatDate = (v) => {
+    if (!v) return 'Sin fecha';
+    const d = new Date(v);
+    if (isNaN(d)) return 'Sin fecha';
+    return new Intl.DateTimeFormat('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }).format(d);
+  };
+
+  const formatLocation = (e) =>
+    [e.venueName, e.location, e.city, e.country].filter(Boolean).join(' · ') || 'Sin ubicación';
+
+  const renderEvents = (items) => {
+    if (!grid || !empty) return;
+    grid.innerHTML = '';
+
+    const events = items.map((item) => item?.event ?? item).filter(Boolean);
+
+    if (!events.length) {
+      empty.style.display = 'block';
       return;
     }
-    const token = localStorage.getItem('meetia-access-token');
-    const grid = document.getElementById('recommendations-grid');
-    const status = document.getElementById('recommendations-status');
+    empty.style.display = 'none';
 
-    const formatArgentinaDate = (value) => {
-      if (!value) return 'Sin fecha';
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return 'Sin fecha';
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}-${month}-${year}`;
-    };
+    events.forEach((event) => {
+      const card = document.createElement('a');
+      card.href = `/events/${event.id}`;
+      card.className = 'event-card';
+      card.style.textDecoration = 'none';
+      const img = event.coverImage || event.bannerImage;
+      card.innerHTML = `
+        ${img
+          ? `<img src="${img}" alt="${event.title ?? 'Evento'}" class="event-card__image" />`
+          : `<div class="event-card__image event-card__image--placeholder">Evento</div>`}
+        <div class="event-card__content">
+          <span class="event-card__tag">${event.category ?? 'Evento'}</span>
+          <h3>${event.title ?? 'Sin título'}</h3>
+          <p class="event-card__date">${formatDate(event.startDate)}</p>
+          <p class="event-card__location">${formatLocation(event)}</p>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  };
 
-    const formatLocation = (event) => {
-      const parts = [event.location, event.city, event.country, event.address].filter(Boolean);
-      return parts.length ? parts.join(' - ') : 'Sin ubicación';
-    };
+  const load = async () => {
+    show('Cargando recomendaciones...');
+    try {
+      const data = await api.getRecommendations(12);
+      hide();
+      const items = Array.isArray(data) ? data : (data?.events ?? data?.recommendations ?? data?.data ?? []);
+      renderEvents(items);
+    } catch (e) {
+      show(e instanceof Error ? e.message : 'No se pudieron cargar las recomendaciones.');
+    }
+  };
 
-    const renderRecommendations = (items) => {
-      if (!grid) return;
-      grid.innerHTML = '';
+  load();
+</script>
 
-      if (!items || items.length === 0) {
-        status.style.display = 'block';
-        status.textContent = 'Todavía no tenemos recomendaciones para vos.';
-        return;
-      }
-
-      items.forEach((item) => {
-        const event = item.event || item;
-        const card = document.createElement('a');
-        card.href = `/events/${event.id}`;
-        card.className = 'box';
-        card.style.textDecoration = 'none';
-        card.style.color = 'inherit';
-        const imageUrl = event.coverImage || event.bannerImage;
-        card.innerHTML = `
-          ${imageUrl ? `<img src="${imageUrl}" alt="${event.title || 'Evento'}" style="width:100%;height:180px;object-fit:cover;border-radius:12px;display:block;" />` : '<div class="ph">Evento</div>'}
-          <h3>${event.title || 'Evento sin título'}</h3>
-          <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
-        `;
-        grid.appendChild(card);
-      });
-    };
-
-    const loadRecommendations = async () => {
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
-
-      status.style.display = 'block';
-      status.textContent = 'Cargando recomendaciones...';
-
-      try {
-        const response = await fetch(`${baseApiUrl}/recommendations?limit=6`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const payload = await response.json().catch(() => []);
-        if (!response.ok) {
-          throw new Error(payload.message || 'No se pudieron cargar las recomendaciones.');
-        }
-
-        renderRecommendations(Array.isArray(payload) ? payload : payload.events || []);
-        status.style.display = 'none';
-      } catch (error) {
-        status.style.display = 'block';
-        status.textContent = error.message || 'No se pudieron cargar las recomendaciones.';
-      }
-    };
-
-    loadRecommendations();
-  </script>
-</AppLayout>
+<style>
+  .event-card {
+    display: block;
+    background: #fff;
+    border: 1px solid #e6e7ef;
+    border-radius: 18px;
+    overflow: hidden;
+    color: inherit;
+    box-shadow: 0 8px 20px rgba(17,24,39,0.05);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .event-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(17,24,39,0.08); }
+  .event-card__image { display:block;width:100%;height:180px;object-fit:cover;background:#eef2ff; }
+  .event-card__image--placeholder { display:grid;place-items:center;font-weight:700;text-transform:uppercase;color:#5b63b7;background:linear-gradient(135deg,#eef2ff,#e0f2fe); }
+  .event-card__content { padding:1rem; }
+  .event-card__tag { display:inline-block;padding:0.3rem 0.65rem;border-radius:999px;background:#eef2ff;color:#3644c9;font-size:0.72rem;font-weight:700;text-transform:uppercase; }
+  .event-card h3 { margin:0.75rem 0 0.4rem;font-size:1.05rem;line-height:1.35;color:#1f2937; }
+  .event-card__date,.event-card__location { margin:0.2rem 0;color:#4b5563;font-size:0.9rem; }
+</style>

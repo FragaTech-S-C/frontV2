@@ -2,12 +2,180 @@
 import AppLayout from '@/layouts/AppLayout.astro';
 ---
 <AppLayout title="Amigos">
-  <form class="row">
-    <input class="grow" aria-label="Añadir amigo" placeholder="Nombre o email" />
+  <!-- Add friend -->
+  <form id="add-friend-form" class="box row" style="align-items:flex-end;">
+    <label class="grow" style="margin:0;">
+      Email del amigo
+      <input name="friendEmail" type="email" placeholder="ejemplo@correo.com" required />
+    </label>
     <button class="btn" type="submit">Añadir amigo</button>
+    <p id="add-status" aria-live="polite" class="muted" style="margin:0;"></p>
   </form>
-  <div class="box">
-    <div class="row"><span class="grow">Amigo</span><button class="btn out">Eliminar</button></div>
-    <div class="row"><span class="grow">Amigo</span><button class="btn out">Eliminar</button></div>
-  </div>
+
+  <!-- Pending requests -->
+  <section>
+    <h3 style="margin-bottom:0.5rem;">Solicitudes pendientes</h3>
+    <div id="requests-status" class="muted" style="display:none;"></div>
+    <div id="requests-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+    <p id="requests-empty" class="muted" style="display:none;">Sin solicitudes pendientes.</p>
+  </section>
+
+  <!-- Friends list -->
+  <section>
+    <h3 style="margin-bottom:0.5rem;">Mis amigos</h3>
+    <div id="friends-status" class="muted" style="display:none;"></div>
+    <div id="friends-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+    <p id="friends-empty" class="muted" style="display:none;">Todavía no tenés amigos en Meetia.</p>
+  </section>
 </AppLayout>
+
+<script>
+  import { api, getStoredAuth } from '@/lib/api';
+
+  const currentUserId = () => {
+    const auth = getStoredAuth();
+    return (auth?.user?.id ?? auth?.id ?? auth?.userId ?? null) as string | null;
+  };
+
+  // ── Pending requests ────────────────────────────────────────────────────────
+
+  const requestsList = document.getElementById('requests-list');
+  const requestsEmpty = document.getElementById('requests-empty');
+  const requestsStatus = document.getElementById('requests-status');
+
+  const loadRequests = async () => {
+    if (!requestsList) return;
+    if (requestsStatus) requestsStatus.style.display = 'none';
+    requestsList.innerHTML = '';
+    try {
+      const data = await api.getFriendRequests(currentUserId() ?? undefined);
+      const items = Array.isArray(data) ? data : (data?.requests ?? data?.data ?? []);
+      const pending = items.filter((r) => r.status === 'PENDING');
+
+      if (!pending.length) {
+        if (requestsEmpty) requestsEmpty.style.display = 'block';
+        return;
+      }
+      if (requestsEmpty) requestsEmpty.style.display = 'none';
+
+      pending.forEach((req) => {
+        const row = document.createElement('div');
+        row.className = 'box row';
+        const sender = req.sender;
+        const name = sender
+          ? `${sender.firstName ?? ''} ${sender.lastName ?? ''}`.trim() || sender.email
+          : `Solicitud de ${req.senderId ?? 'alguien'}`;
+
+        row.innerHTML = `
+          <span class="grow">${name}</span>
+          <button class="btn accept-req-btn" type="button" data-id="${req.id}">Aceptar</button>
+          <button class="btn out reject-req-btn" type="button" data-id="${req.id}">Rechazar</button>
+        `;
+        requestsList.appendChild(row);
+      });
+
+      requestsList.querySelectorAll('.accept-req-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await api.acceptFriendRequest(btn.dataset.id, currentUserId() ?? undefined);
+            btn.closest('.box')?.remove();
+            loadFriends();
+          } catch (e) { alert(e instanceof Error ? e.message : 'Error'); btn.disabled = false; }
+        });
+      });
+
+      requestsList.querySelectorAll('.reject-req-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await api.rejectFriendRequest(btn.dataset.id, currentUserId() ?? undefined);
+            btn.closest('.box')?.remove();
+          } catch (e) { alert(e instanceof Error ? e.message : 'Error'); btn.disabled = false; }
+        });
+      });
+    } catch (e) {
+      if (requestsStatus) { requestsStatus.style.display = 'block'; requestsStatus.textContent = e instanceof Error ? e.message : 'Error cargando solicitudes.'; }
+    }
+  };
+
+  // ── Friends list ────────────────────────────────────────────────────────────
+
+  const friendsList = document.getElementById('friends-list');
+  const friendsEmpty = document.getElementById('friends-empty');
+  const friendsStatus = document.getElementById('friends-status');
+
+  const loadFriends = async () => {
+    if (!friendsList) return;
+    friendsList.innerHTML = '';
+    if (friendsStatus) friendsStatus.style.display = 'none';
+    try {
+      const data = await api.getFriends(currentUserId() ?? undefined);
+      const items = Array.isArray(data) ? data : (data?.friends ?? data?.data ?? []);
+      const accepted = items.filter((f) => !f.status || f.status === 'ACCEPTED');
+
+      if (!accepted.length) {
+        if (friendsEmpty) friendsEmpty.style.display = 'block';
+        return;
+      }
+      if (friendsEmpty) friendsEmpty.style.display = 'none';
+
+      accepted.forEach((fr) => {
+        const myId = currentUserId();
+        const other = fr.senderId === myId ? fr.receiver : fr.sender;
+        const name = other
+          ? `${other.firstName ?? ''} ${other.lastName ?? ''}`.trim() || other.email
+          : `Amigo (${fr.receiverId ?? fr.senderId})`;
+        const avatar = other?.avatar;
+
+        const row = document.createElement('div');
+        row.className = 'box row';
+        row.innerHTML = `
+          ${avatar ? `<img src="${avatar}" alt="${name}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />` : `<div style="width:40px;height:40px;border-radius:50%;background:#dbeafe;display:grid;place-items:center;font-weight:700;color:#1e40af;">${name[0]?.toUpperCase() ?? '?'}</div>`}
+          <span class="grow">${name}</span>
+          <button class="btn out remove-friend-btn" type="button" data-id="${fr.id}">Eliminar</button>
+        `;
+        friendsList.appendChild(row);
+      });
+
+      friendsList.querySelectorAll('.remove-friend-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('¿Eliminar a este amigo?')) return;
+          btn.disabled = true;
+          try {
+            await api.removeFriend(btn.dataset.id, currentUserId() ?? undefined);
+            btn.closest('.box')?.remove();
+            if (!friendsList.querySelector('.box')) {
+              if (friendsEmpty) friendsEmpty.style.display = 'block';
+            }
+          } catch (e) { alert(e instanceof Error ? e.message : 'Error'); btn.disabled = false; }
+        });
+      });
+    } catch (e) {
+      if (friendsStatus) { friendsStatus.style.display = 'block'; friendsStatus.textContent = e instanceof Error ? e.message : 'Error cargando amigos.'; }
+    }
+  };
+
+  // ── Add friend form ─────────────────────────────────────────────────────────
+
+  const addForm = document.getElementById('add-friend-form') as HTMLFormElement | null;
+  const addStatus = document.getElementById('add-status');
+
+  addForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(addForm);
+    const friendEmail = String(fd.get('friendEmail') ?? '').trim();
+    if (!friendEmail) return;
+    if (addStatus) addStatus.textContent = 'Enviando solicitud...';
+    try {
+      await api.sendFriendRequest({ userId: currentUserId() ?? undefined, friendEmail });
+      if (addStatus) addStatus.textContent = 'Solicitud enviada.';
+      addForm.reset();
+    } catch (err) {
+      if (addStatus) addStatus.textContent = err instanceof Error ? err.message : 'No se pudo enviar la solicitud.';
+    }
+  });
+
+  loadRequests();
+  loadFriends();
+</script>

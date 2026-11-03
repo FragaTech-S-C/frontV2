@@ -1,69 +1,243 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-import { type APIContext } from 'astro';
-
-export const prerender = false;
-export function getStaticPaths() { return [{ params: { id: '1' } }]; }
+export function getStaticPaths() { return [{ params: { id: '_' } }]; }
 const { id } = Astro.params;
 ---
-<AppLayout title="Nombre del evento">
-  <p>Fecha · Lugar · Categoría · Organizador</p>
-  <div class="grid">
-    <section class="box">
-      <h3>Descripción y notas</h3>
-      <p>Archivos, documentos y ubicaciones del evento.</p>
-      <h3>Asistentes</h3>
-      <div class="ph">Avatares</div>
+<AppLayout title="Evento">
+  <div id="event-status" class="box" style="display:none;"></div>
+  <div id="event-shell" style="display:none;">
+    <div id="event-cover-wrap"></div>
+
+    <div class="row" style="align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-top:1rem;">
+      <!-- Main column -->
+      <section class="box" style="flex:2;min-width:260px;">
+        <div class="row">
+          <span id="ev-category" class="tag"></span>
+          <span id="ev-status-badge" class="tag tag--status"></span>
+        </div>
+        <h2 id="ev-title" style="font-size:1.5rem;margin:0.5rem 0;"></h2>
+        <p id="ev-date" class="muted"></p>
+        <p id="ev-location" class="muted"></p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:1rem 0;" />
+        <h3>Descripción</h3>
+        <p id="ev-description" style="white-space:pre-wrap;line-height:1.7;color:#374151;"></p>
+        <div id="ev-attendees-section" style="margin-top:1rem;">
+          <h3>Asistentes</h3>
+          <p id="ev-attendees" class="muted"></p>
+        </div>
+      </section>
+
+      <!-- Sidebar -->
+      <aside class="box" style="flex:1;min-width:220px;">
+        <div id="ev-price-block" style="margin-bottom:0.75rem;"></div>
+        <button class="btn" id="confirm-btn" type="button" style="width:100%;margin-bottom:0.5rem;">Confirmar asistencia</button>
+        <button class="btn out" id="attend-btn" type="button" style="width:100%;margin-bottom:0.5rem;">Asistir al evento</button>
+        <button class="btn out" id="invite-btn" type="button" style="width:100%;margin-bottom:0.5rem;">Invitar a alguien</button>
+        <button class="btn out" id="leave-btn" type="button" style="width:100%;margin-bottom:0.5rem;">Abandonar evento</button>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:0.75rem 0;" />
+        <div id="ev-owner" class="muted" style="font-size:0.85rem;"></div>
+      </aside>
+    </div>
+
+    <!-- Reviews -->
+    <section class="box" style="margin-top:1rem;">
+      <h3>Reseñas</h3>
+      <div id="reviews-list" class="grid" style="margin-top:0.75rem;"></div>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:1rem 0;" />
+      <h3>Dejar reseña</h3>
+      <form id="review-form" style="display:flex;flex-direction:column;gap:0.75rem;max-width:480px;margin-top:0.75rem;">
+        <label>
+          Puntuación (1–5)
+          <input type="number" name="rating" min="1" max="5" required style="width:80px;" />
+        </label>
+        <label>
+          Comentario
+          <textarea name="comment" rows="3"></textarea>
+        </label>
+        <button class="btn" type="submit">Publicar reseña</button>
+        <p id="review-status" aria-live="polite" class="muted"></p>
+      </form>
     </section>
-    <aside class="box">
-      <a href={`/events/${id}/route`} class="ph" style="text-decoration:none">Mini mapa — ver ruta</a>
-      <button class="btn" id="confirm" type="button">Confirmar asistencia</button>
-      <button class="btn out" id="invite" type="button">Invitar</button>
-      <button class="btn out" id="leave_event" type="button">Abandonar evento</button>
-    </aside>
-  </div>
-  <div class="row">
-    <a class="btn out" href={`/events/${id}/edit`}>Editar evento</a>
-    <button class="btn out" type="button">Dejar review</button>
-    <button class="btn out" type="button">Denunciar</button>
+
+    <!-- Admin / owner row -->
+    <div class="row" style="margin-top:1rem;">
+      <a class="btn out" id="edit-link" href="#">Editar evento</a>
+      <button class="btn out" id="report-btn" type="button">Denunciar</button>
+    </div>
   </div>
 
-  <script type="module">
+  <script>
     import { api } from '@/lib/api';
+    const eventId = window.location.pathname.split('/').filter(Boolean)[1];
 
-    const eventId = '${id}';
-    const confirmButton = document.getElementById('confirm');
-    const inviteButton = document.getElementById('invite');
-    const leaveButton = document.getElementById('leave_event');
+    const statusEl = document.getElementById('event-status');
+    const shell = document.getElementById('event-shell');
 
-    confirmButton?.addEventListener('click', async () => {
+    const show = (msg) => {
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = msg; }
+    };
+
+    const formatDate = (v) => {
+      if (!v) return 'Sin fecha';
+      const d = new Date(v);
+      if (isNaN(d)) return 'Sin fecha';
+      return new Intl.DateTimeFormat('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }).format(d);
+    };
+
+    const formatLocation = (e) =>
+      [e.venueName, e.location, e.address, e.city, e.country].filter(Boolean).join(' · ') || 'Sin ubicación';
+
+    const loadEvent = async () => {
+      show('Cargando evento...');
+      try {
+        const event = await api.getEventById(eventId);
+        if (statusEl) statusEl.style.display = 'none';
+        if (shell) shell.style.display = 'block';
+
+        // Cover image
+        const coverWrap = document.getElementById('event-cover-wrap');
+        if (coverWrap) {
+          const img = event.coverImage || event.bannerImage;
+          coverWrap.innerHTML = img
+            ? `<img src="${img}" alt="${event.title}" style="width:100%;max-height:360px;object-fit:cover;border-radius:12px;display:block;" />`
+            : '';
+        }
+
+        const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? ''; };
+
+        setText('ev-title', event.title || 'Sin título');
+        setText('ev-category', event.category || '');
+        setText('ev-status-badge', event.status || '');
+        setText('ev-date', `${formatDate(event.startDate)}${event.endDate ? ' → ' + formatDate(event.endDate) : ''}`);
+        setText('ev-location', formatLocation(event));
+        setText('ev-description', event.description || 'Sin descripción.');
+        setText('ev-attendees', `${event.currentAttendees ?? 0}${event.maxAttendees ? ' / ' + event.maxAttendees : ''} asistentes`);
+
+        const priceBlock = document.getElementById('ev-price-block');
+        if (priceBlock) {
+          priceBlock.innerHTML = event.isFree
+            ? '<span class="tag" style="background:#d1fae5;color:#065f46;">Gratuito</span>'
+            : `<span class="tag" style="background:#fef9c3;color:#713f12;">$${event.price ?? ''} ${event.currency ?? ''}</span>`;
+        }
+
+        const ownerEl = document.getElementById('ev-owner');
+        if (ownerEl && event.creator) {
+          ownerEl.textContent = `Organizado por: ${event.creator.firstName ?? ''} ${event.creator.lastName ?? ''}`.trim();
+        }
+
+        const editLink = document.getElementById('edit-link');
+        if (editLink) editLink.href = `/events/${eventId}/edit`;
+
+        // Load reviews
+        loadReviews();
+      } catch (err) {
+        show(err instanceof Error ? err.message : 'No se pudo cargar el evento.');
+      }
+    };
+
+    const loadReviews = async () => {
+      const list = document.getElementById('reviews-list');
+      if (!list) return;
+      try {
+        const data = await api.getReviews(eventId);
+        const reviews = Array.isArray(data) ? data : (data?.reviews ?? data?.data ?? []);
+        if (!reviews.length) { list.innerHTML = '<p class="muted">Sin reseñas todavía.</p>'; return; }
+        list.innerHTML = reviews.map((r) => `
+          <div class="box" style="padding:0.75rem;">
+            <div class="row"><strong>${r.comment ? '' : ''}</strong><span class="tag">${'★'.repeat(r.rating ?? r.review ?? 0)}</span></div>
+            <p style="margin-top:0.4rem;">${r.comment ?? r.message ?? ''}</p>
+          </div>
+        `).join('');
+      } catch {
+        list.innerHTML = '<p class="muted">No se pudieron cargar las reseñas.</p>';
+      }
+    };
+
+    // Action buttons
+    const confirmBtn = document.getElementById('confirm-btn');
+    confirmBtn?.addEventListener('click', async () => {
       try {
         await api.confirmAssistance(eventId);
-        confirmButton.textContent = 'Asistencia confirmada';
-      } catch (error) {
-        alert(error instanceof Error ? error.message : 'No se pudo confirmar la asistencia.');
-      }
+        confirmBtn.textContent = '✔ Asistencia confirmada';
+        confirmBtn.disabled = true;
+      } catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
     });
 
-    inviteButton?.addEventListener('click', async () => {
+    const attendBtn = document.getElementById('attend-btn');
+    attendBtn?.addEventListener('click', async () => {
+      try {
+        await api.attendEvent(eventId);
+        attendBtn.textContent = '✔ Apuntado al evento';
+        attendBtn.disabled = true;
+      } catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
+    });
+
+    const inviteBtn = document.getElementById('invite-btn');
+    inviteBtn?.addEventListener('click', async () => {
       try {
         const result = await api.inviteToEvent(eventId);
-        inviteButton.textContent = result?.message ? 'Invitación enviada' : 'Invitar';
-        if (result?.message) {
-          alert(result.message);
-        }
-      } catch (error) {
-        alert(error instanceof Error ? error.message : 'No se pudo invitar a este evento.');
+        alert(result?.message ?? 'Invitación enviada.');
+      } catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
+    });
+
+    const leaveBtn = document.getElementById('leave-btn');
+    leaveBtn?.addEventListener('click', async () => {
+      if (!confirm('¿Querés abandonar este evento?')) return;
+      try {
+        await api.leaveEvent(eventId);
+        leaveBtn.textContent = '✔ Abandonaste el evento';
+        leaveBtn.disabled = true;
+      } catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
+    });
+
+    const reportBtn = document.getElementById('report-btn');
+    reportBtn?.addEventListener('click', async () => {
+      const reason = prompt('¿Por qué querés denunciar este evento?');
+      if (!reason) return;
+      try {
+        await api.createReport({ targetType: 'event', targetId: eventId, reason });
+        alert('Denuncia enviada. Gracias.');
+      } catch (e) { alert(e instanceof Error ? e.message : 'Error al denunciar.'); }
+    });
+
+    // Review form
+    const reviewForm = document.getElementById('review-form');
+    const reviewStatus = document.getElementById('review-status');
+    reviewForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(reviewForm);
+      const rating = Number(fd.get('rating'));
+      const comment = String(fd.get('comment') ?? '').trim();
+      if (!rating || rating < 1 || rating > 5) {
+        if (reviewStatus) reviewStatus.textContent = 'Elegí una puntuación entre 1 y 5.';
+        return;
+      }
+      try {
+        if (reviewStatus) reviewStatus.textContent = 'Publicando...';
+        await api.createReview({ eventId, rating, comment: comment || undefined });
+        if (reviewStatus) reviewStatus.textContent = 'Reseña publicada.';
+        reviewForm.reset();
+        loadReviews();
+      } catch (err) {
+        if (reviewStatus) reviewStatus.textContent = err instanceof Error ? err.message : 'No se pudo publicar.';
       }
     });
 
-    leaveButton?.addEventListener('click', async () => {
-      try {
-        await api.leaveEvent(eventId);
-        leaveButton.textContent = 'Has abandonado el evento';
-      } catch (error) {
-        alert(error instanceof Error ? error.message : 'No se pudo abandonar el evento.');
-      }
-    });
+    loadEvent();
   </script>
+
+  <style>
+    .tag {
+      display: inline-block;
+      padding: 0.3rem 0.65rem;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3644c9;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .tag--status { background: #f0fdf4; color: #166534; }
+  </style>
 </AppLayout>

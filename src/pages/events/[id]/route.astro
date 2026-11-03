@@ -1,0 +1,155 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+export function getStaticPaths() { return [{ params: { id: '_' } }]; }
+const { id } = Astro.params;
+---
+<AppLayout title="Cómo llegar">
+  <div class="row" style="margin-bottom:0.75rem;">
+    <a class="btn out" id="back-link" href="#">← Volver al evento</a>
+  </div>
+
+  <div id="route-status" class="box" style="display:none;"></div>
+
+  <div class="box" id="event-info" style="display:none;">
+    <h3 id="ev-title">Evento</h3>
+    <p id="ev-location" class="muted"></p>
+  </div>
+
+  <div class="box" style="margin-top:1rem;">
+    <h3>Obtener indicaciones</h3>
+    <form id="route-form" style="display:flex;flex-direction:column;gap:0.75rem;max-width:460px;margin-top:0.75rem;">
+      <label>Tu dirección de origen<input name="origin" placeholder="Av. Corrientes 1234, CABA" /></label>
+      <label>Modo de transporte
+        <select name="mode">
+          <option value="driving">Auto</option>
+          <option value="walking">A pie</option>
+          <option value="transit">Transporte público</option>
+        </select>
+      </label>
+      <button class="btn" type="submit">Calcular ruta</button>
+    </form>
+    <div id="route-result" style="margin-top:1rem;"></div>
+  </div>
+
+  <div class="box" style="margin-top:1rem;">
+    <h3>Ver en mapa</h3>
+    <p class="muted">Abrí la ubicación del evento en tu aplicación de mapas preferida.</p>
+    <div class="row" style="margin-top:0.75rem;">
+      <a class="btn out" id="google-maps-link" href="#" target="_blank" rel="noopener noreferrer">Google Maps</a>
+      <a class="btn out" id="waze-link" href="#" target="_blank" rel="noopener noreferrer">Waze</a>
+    </div>
+  </div>
+</AppLayout>
+
+<script>
+  import { api } from '@/lib/api';
+  const eventId = window.location.pathname.split('/').filter(Boolean)[1];
+
+  const statusEl = document.getElementById('route-status');
+  const backLink = document.getElementById('back-link');
+  const eventInfo = document.getElementById('event-info');
+  const routeResult = document.getElementById('route-result');
+
+  if (backLink) backLink.href = `/events/${eventId}`;
+
+  const show = (msg) => {
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = msg; }
+  };
+
+  const hide = () => { if (statusEl) statusEl.style.display = 'none'; };
+
+  const loadEvent = async () => {
+    show('Cargando evento...');
+    try {
+      const event = await api.getEventById(eventId);
+      hide();
+      if (eventInfo) eventInfo.style.display = 'block';
+
+      const titleEl = document.getElementById('ev-title');
+      const locationEl = document.getElementById('ev-location');
+      if (titleEl) titleEl.textContent = event.title ?? 'Evento';
+
+      const locationParts = [event.venueName, event.location, event.address, event.city, event.country].filter(Boolean);
+      const locationStr = locationParts.join(', ');
+      if (locationEl) locationEl.textContent = locationStr || 'Ubicación no disponible';
+
+      // Assign map links if coordinates available
+      if (event.latitude && event.longitude) {
+        const lat = event.latitude;
+        const lng = event.longitude;
+        const label = encodeURIComponent(event.title ?? 'Evento');
+        const gLink = document.getElementById('google-maps-link');
+        const wLink = document.getElementById('waze-link');
+        if (gLink) gLink.href = `https://maps.google.com/?q=${lat},${lng}`;
+        if (wLink) wLink.href = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+      } else if (locationStr) {
+        const encoded = encodeURIComponent(locationStr);
+        const gLink = document.getElementById('google-maps-link');
+        const wLink = document.getElementById('waze-link');
+        if (gLink) gLink.href = `https://maps.google.com/?q=${encoded}`;
+        if (wLink) wLink.href = `https://waze.com/ul?q=${encoded}`;
+      }
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'No se pudo cargar el evento.');
+    }
+  };
+
+  const routeForm = document.getElementById('route-form');
+  routeForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!routeResult) return;
+    routeResult.textContent = '';
+
+    // Try to use device geolocation + backend API for directions
+    const fd = new FormData(routeForm);
+    const originInput = String(fd.get('origin') ?? '').trim();
+    const mode = String(fd.get('mode') ?? 'driving');
+
+    routeResult.innerHTML = '<p class="muted">Calculando ruta...</p>';
+
+    // If no origin provided, try geolocation
+    const getCoords = () =>
+      new Promise((resolve, reject) => {
+        if (!originInput && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => reject(new Error('No se pudo obtener tu ubicación. Ingresá una dirección.')),
+            { timeout: 8000 },
+          );
+        } else if (originInput) {
+          resolve(null);
+        } else {
+          reject(new Error('Ingresá una dirección de origen o permitís el acceso a tu ubicación.'));
+        }
+      });
+
+    try {
+      const coords = await getCoords();
+
+      if (coords) {
+        // Use backend directions endpoint
+        const data = await api.getEventDirections(eventId, coords.lat, coords.lng);
+        const steps = data?.steps ?? data?.routes?.[0]?.legs?.[0]?.steps ?? [];
+        if (steps.length) {
+          routeResult.innerHTML = `
+            <p class="muted" style="margin-bottom:0.5rem;"><strong>Distancia:</strong> ${data?.distance ?? data?.routes?.[0]?.legs?.[0]?.distance?.text ?? '-'} · <strong>Duración:</strong> ${data?.duration ?? data?.routes?.[0]?.legs?.[0]?.duration?.text ?? '-'}</p>
+            <ol style="padding-left:1.25rem;line-height:1.8;color:#374151;">${steps.map((s) => `<li>${s.instructions ?? s.html_instructions?.replace(/<[^>]+>/g,'') ?? JSON.stringify(s)}</li>`).join('')}</ol>
+          `;
+        } else {
+          // Fallback: open Google Maps with current location
+          const gUrl = `https://maps.google.com/maps/dir/?api=1&origin=${coords.lat},${coords.lng}&destination=${encodeURIComponent(document.getElementById('ev-location')?.textContent ?? '')}&travelmode=${mode}`;
+          routeResult.innerHTML = `<a class="btn" href="${gUrl}" target="_blank" rel="noopener noreferrer">Abrir en Google Maps</a>`;
+        }
+      } else {
+        // Open Google Maps with text origin
+        const dest = document.getElementById('ev-location')?.textContent ?? '';
+        const gUrl = `https://maps.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originInput)}&destination=${encodeURIComponent(dest)}&travelmode=${mode}`;
+        routeResult.innerHTML = `<a class="btn" href="${gUrl}" target="_blank" rel="noopener noreferrer">Ver ruta en Google Maps</a>`;
+      }
+    } catch (err) {
+      routeResult.innerHTML = `<p style="color:#b91c1c;">${err instanceof Error ? err.message : 'No se pudo calcular la ruta.'}</p>`;
+    }
+  });
+
+  loadEvent();
+</script>
