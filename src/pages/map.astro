@@ -1,0 +1,18 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+---
+
+<AppLayout title="Mapa">
+  <section class="box">
+    <h2>Mapa de eventos</h2>
+    <div id="osm-map" style="height: 520px; width: 100%; border-radius: 16px; overflow: hidden;"></div>
+  </section>
+
+  <iframe
+    id="osm-map"
+    title="Mapa de eventos en Buenos Aires"
+    src="https://www.openstreetmap.org/export/embed.html?bbox=-58.5200%2C-34.7000%2C-58.2600%2C-34.4800&layer=mapnik&marker=-34.6037%2C-58.3816"
+    style="height: 520px; width: 100%; border: 0; border-radius: 16px;"
+    loading="lazy"
+  ></iframe>
+</AppLayout>

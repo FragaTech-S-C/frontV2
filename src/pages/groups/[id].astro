@@ -1,135 +1,184 @@
 ---
 import AppLayout from '@/layouts/AppLayout.astro';
-
-export function getStaticPaths() {
-  return [
-    { params: { id: 'las-girls' } },
-    { params: { id: 'tech-crew' } },
-    { params: { id: 'design-lab' } },
-    { params: { id: '1' } },
-    { params: { id: '2' } },
-  ];
-}
 ---
 
 <AppLayout title="Grupo">
   <div id="group-shell"></div>
 
   <script>
-    (() => {
-      const shell = document.getElementById('group-shell');
-      if (!shell) return;
+    import { api } from '@/lib/api';
 
-      const currentPath = window.location.pathname.split('/').filter(Boolean).pop();
-      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
-      const slugify = (value = '') => String(value)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'grupo';
+    const shell = document.getElementById('group-shell');
+    if (!shell) throw new Error('Missing group shell');
 
-      const group = groups.find((item) => String(item.slug || slugify(item.name || '')) === String(currentPath))
-        || groups.find((item) => String(item.id) === String(currentPath));
+    const currentPath = window.location.pathname.split('/').filter(Boolean).pop() || '';
+    const groupId = decodeURIComponent(currentPath);
 
-      const defaultMembers = ['Yo', 'Ana', 'Mateo'];
-      const defaultEvents = [
-        { id: 'event-demo-1', title: 'Meetup de comunidad', startDate: '2026-10-18T19:00:00.000Z', location: 'CABA', country: 'Argentina' },
-        { id: 'event-demo-2', title: 'Workshop de diseño', startDate: '2026-10-25T18:30:00.000Z', location: 'Palermo', country: 'Argentina' },
-      ];
+    const loadGroup = async () => {
+      try {
+        const groups = await api.getGroups();
+        const group = (Array.isArray(groups) ? groups : []).find((item) => String(item.id) === String(groupId)) || null;
 
-      const members = Array.isArray(group?.members) && group.members.length ? group.members : defaultMembers;
-      const events = Array.isArray(group?.events) && group.events.length ? group.events : defaultEvents;
-
-      const cover = group?.coverImage
-        ? `<img src="${group.coverImage}" alt="${group.name || 'Grupo'}" class="group-cover" />`
-        : '<div class="group-cover placeholder">Portada del grupo</div>';
-
-      const avatar = group?.avatar
-        ? `<img src="${group.avatar}" alt="${group.name || 'Grupo'}" class="group-avatar" />`
-        : `<div class="group-avatar letter">${(group?.name || 'G').charAt(0).toUpperCase()}</div>`;
-
-      const memberList = members.map((member) => `<div class="member-pill">${member}</div>`).join('');
-
-      const eventList = events.map((event) => {
-        const date = event.startDate ? new Date(event.startDate) : null;
-        const formattedDate = date && !Number.isNaN(date.getTime())
-          ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
-          : 'Sin fecha';
-
-        return `
-          <article class="mini-event">
-            <div class="mini-event__thumb">${event.category || 'Evento'}</div>
-            <div>
-              <strong>${event.title || 'Evento sin título'}</strong>
-              <p>${formattedDate}</p>
-              <p>${event.location || event.city || 'Sin ubicación'}</p>
+        if (!group) {
+          shell.innerHTML = `
+            <div class="box">
+              <h2>Grupo no encontrado</h2>
+              <p>No tenés acceso a este grupo o aún no fue invitado a él.</p>
+              <a class="btn" href="/groups">Volver a mis grupos</a>
             </div>
-          </article>
-        `;
-      }).join('');
+          `;
+          return;
+        }
 
-      shell.innerHTML = `
-        <section class="box group-header">
-          ${cover}
-          <div class="group-summary">
-            <div class="group-title-row">
-              ${avatar}
+        const members = Array.isArray(group.members) ? group.members as Array<Record<string, any>> : [];
+        const events = Array.isArray(group.events) ? group.events as Array<Record<string, any>> : [];
+        const cover = group.coverImage
+          ? `<img src="${group.coverImage}" alt="${group.name || 'Grupo'}" class="group-cover" />`
+          : '<div class="group-cover placeholder">Portada del grupo</div>';
+        const avatar = group.avatar
+          ? `<img src="${group.avatar}" alt="${group.name || 'Grupo'}" class="group-avatar" />`
+          : `<div class="group-avatar letter">${(group.name || 'G').charAt(0).toUpperCase()}</div>`;
+        const memberList = members.map((member: Record<string, any>) => `<div class="member-pill">${member.firstName || member.nickname || 'Usuario'}</div>`).join('');
+        const eventList = events.map((event: Record<string, any>) => {
+          const date = event.startDate ? new Date(event.startDate) : null;
+          const formattedDate = date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date) : 'Sin fecha';
+          return `
+            <article class="mini-event">
+              <div class="mini-event__thumb">${event.category || 'Evento'}</div>
               <div>
-                <h2>${group?.name || 'Grupo sin nombre'}</h2>
-                <p>${group?.type === 'institutional' ? 'Grupo institucional' : 'Grupo personal'} · ${group?.leader || 'Líder'}</p>
+                <strong>${event.title || 'Evento sin título'}</strong>
+                <p>${formattedDate}</p>
+                <p>${event.location || event.city || 'Sin ubicación'}</p>
+              </div>
+            </article>
+          `;
+        }).join('');
+
+        shell.innerHTML = `
+          <section class="box group-header">
+            ${cover}
+            <div class="group-summary">
+              <div class="group-title-row">
+                ${avatar}
+                <div>
+                  <h2>${group.name || 'Grupo sin nombre'}</h2>
+                  <p>${group.institutionId ? 'Grupo institucional' : 'Grupo personal'} · ${group.owner?.firstName || 'Líder'}</p>
+                </div>
+              </div>
+              <p>${group.description || 'Sin descripción aún.'}</p>
+              <div class="row">
+                <a class="btn" href="/events/new?groupId=${encodeURIComponent(group.id || '')}">Crear evento</a>
               </div>
             </div>
-            <p>${group?.description || 'Sin descripción aún.'}</p>
-            <div class="row">
-              <a class="btn" href="/events/new">Crear evento</a>
-              <button class="btn out" type="button">Invitar miembro</button>
-            </div>
+          </section>
+
+          <div class="group-grid">
+            <section class="box">
+              <h3>Administrar grupo</h3>
+              <div class="status-row">
+                <span>Miembros</span>
+                <strong>${members.length}</strong>
+              </div>
+              <div class="status-row">
+                <span>Privacidad</span>
+                <strong>${group.institutionId ? 'Institucional' : 'Personal'}</strong>
+              </div>
+              <div class="status-row">
+                <span>Estado</span>
+                <strong>Activo</strong>
+              </div>
+            </section>
+
+            <section class="box">
+              <h3>Crear nuevo evento</h3>
+              <p>Prepará una nueva actividad para este grupo.</p>
+              <a class="btn" href="/events/new?groupId=${encodeURIComponent(group.id || '')}">Ir al formulario</a>
+            </section>
+
+            <section class="box">
+              <h3>Miembros</h3>
+              <div class="member-list">${memberList || '<p>No hay miembros aún.</p>'}</div>
+            </section>
+
+            <section class="box">
+              <h3>Añadir personas</h3>
+              <input id="group-member-search" type="search" placeholder="Buscar por email" autocomplete="off" style="width:100%;margin-bottom:0.75rem;" />
+              <div id="group-member-results" style="display:grid; gap:0.5rem;"></div>
+            </section>
+
+            <section class="box events-box">
+              <h3>Eventos del grupo</h3>
+              <div class="mini-event-list">${eventList || '<p>No hay eventos creados.</p>'}</div>
+            </section>
           </div>
-        </section>
+        `;
 
-        <div class="group-grid">
-          <section class="box">
-            <h3>Administrar grupo</h3>
-            <div class="status-row">
-              <span>Miembros</span>
-              <strong>${members.length}</strong>
-            </div>
-            <div class="status-row">
-              <span>Privacidad</span>
-              <strong>${group?.type === 'institutional' ? 'Institucional' : 'Personal'}</strong>
-            </div>
-            <div class="status-row">
-              <span>Estado</span>
-              <strong>Activo</strong>
-            </div>
-          </section>
+        const groupMemberSearch = document.getElementById('group-member-search') as HTMLInputElement | null;
+        const groupMemberResults = document.getElementById('group-member-results') as HTMLDivElement | null;
+        const storedAuth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
+        const currentUserId = storedAuth?.user?.id ?? storedAuth?.id ?? storedAuth?.userId ?? localStorage.getItem('meetia-user-id');
 
-          <section class="box">
-            <h3>Crear nuevo evento</h3>
-            <p>Prepará una nueva actividad para este grupo.</p>
-            <a class="btn" href="/events/new">Ir al formulario</a>
-          </section>
+        const renderGroupMemberSearch = async () => {
+          if (!groupMemberSearch || !groupMemberResults) return;
+          const query = String(groupMemberSearch.value || '').trim();
 
-          <section class="box">
-            <h3>Miembros</h3>
-            <div class="member-list">${memberList || '<p>No hay miembros aún.</p>'}</div>
-            <button class="btn out" type="button">Gestionar miembros</button>
-          </section>
+          if (!query) {
+            groupMemberResults.innerHTML = '<span>Escribí un email para buscar personas.</span>';
+            return;
+          }
 
-          <section class="box chat-box">
-            <h3>Chat del grupo</h3>
-            <p>Próximamente: chat interno del grupo.</p>
-            <div class="chat-placeholder">Chat en construcción</div>
-          </section>
+          try {
+            const users = await api.searchUsersByEmail(query);
+            const visibleUsers = Array.isArray(users) ? users.filter((user) => String(user.id) !== String(currentUserId)) : [];
+            if (!visibleUsers.length) {
+              groupMemberResults.innerHTML = '<span>No se encontraron personas.</span>';
+              return;
+            }
 
-          <section class="box events-box">
-            <h3>Eventos del grupo</h3>
-            <div class="mini-event-list">${eventList || '<p>No hay eventos creados.</p>'}</div>
-          </section>
-        </div>
-      `;
-    })();
+            groupMemberResults.innerHTML = visibleUsers.slice(0, 6).map((user) => `
+              <button type="button" class="btn out" data-user-id="${user.id}" style="justify-content:flex-start; width:100%;">
+                ${user.firstName || user.nickname || 'Usuario'} ${user.lastName || ''} (@${user.nickname || user.email || 'sin-nick'})
+              </button>
+            `).join('');
+
+            groupMemberResults.querySelectorAll<HTMLButtonElement>('[data-user-id]').forEach((button) => {
+              button.addEventListener('click', async () => {
+                const userId = button.getAttribute('data-user-id');
+                if (!userId) return;
+
+                try {
+                  await api.addMemberToGroup(group.id, userId);
+                  groupMemberSearch.value = '';
+                  await loadGroup();
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : 'No se pudo agregar la persona.';
+                  groupMemberResults.innerHTML = `<span>${message}</span>`;
+                }
+              });
+            });
+          } catch (error) {
+            groupMemberResults.innerHTML = '<span>No se pudo buscar usuarios.</span>';
+          }
+        };
+
+        if (groupMemberSearch) {
+          groupMemberSearch.addEventListener('input', () => {
+            void renderGroupMemberSearch();
+          });
+        }
+        void renderGroupMemberSearch();
+      } catch (error) {
+        shell.innerHTML = `
+          <div class="box">
+            <h2>No se pudo cargar el grupo</h2>
+            <p>${error instanceof Error ? error.message : 'Intentalo nuevamente más tarde.'}</p>
+            <a class="btn" href="/groups">Volver a mis grupos</a>
+          </div>
+        `;
+      }
+    };
+
+    loadGroup();
   </script>
 
   <style>

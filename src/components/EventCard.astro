@@ -45,6 +45,15 @@ const location = [
   eventData?.address ?? Astro.props.address,
 ].filter(Boolean).join(' - ') || 'Sin ubicación';
 
+const slugify = (value = '') => String(value)
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '') || 'evento';
+const safeId = String(id ?? '').trim();
+const eventPath = safeId ? `/events/${slugify(title) || 'evento'}?id=${encodeURIComponent(safeId)}` : `/events/${slugify(title) || 'evento'}`;
+
 const formatDate = (value?: string) => {
   if (!value) return 'Sin fecha';
   const date = new Date(value);
@@ -56,7 +65,7 @@ const formatDate = (value?: string) => {
   }).format(date);
 };
 ---
-<a href={`/events/${id}`} class="event-card">
+<a href={eventPath} class="event-card" data-event-id={safeId}>
   {imageUrl ? (
     <img src={imageUrl} alt={title} class="event-card__image" />
   ) : (
@@ -70,6 +79,28 @@ const formatDate = (value?: string) => {
     <p class="event-card__location">{location}</p>
   </div>
 </a>
+
+<script type="module">
+  import { api } from '@/lib/api';
+
+  document.querySelectorAll('.event-card[data-event-id]').forEach((card) => {
+    card.addEventListener('click', async (event) => {
+      const eventId = card.getAttribute('data-event-id');
+      const href = card.getAttribute('href');
+      if (!eventId || !href) return;
+
+      event.preventDefault();
+
+      try {
+        await api.getEventsById(eventId);
+        window.location.href = href;
+      } catch (error) {
+        console.error('No se pudo cargar el evento:', error);
+        window.location.href = href;
+      }
+    });
+  });
+</script>
 
 <style>
   .event-card {

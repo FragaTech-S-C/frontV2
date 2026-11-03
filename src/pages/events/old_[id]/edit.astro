@@ -1,7 +1,0 @@
----
-import AppLayout from '@/layouts/AppLayout.astro';
-import EventForm from '@/components/EventForm.astro';
-export function getStaticPaths() { return [{ params: { id: '1' } }]; }
-const { id } = Astro.params;
----
-<AppLayout title="Editar evento"><EventForm cancelHref={`/events/${id}`} /></AppLayout>

@@ -56,10 +56,21 @@ import { api, getApiBaseUrl } from '@/lib/api';
 
       const mapped = items.map((entry) => entry.event || entry);
 
+      const slugify = (value) => String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'evento';
+
       mapped.forEach((event) => {
         const card = document.createElement('a');
-        card.href = `/events/${event.id}`;
+        const eventId = event.id ?? event._id;
+        const pathTitle = slugify(event.title || event.name || 'evento') || 'evento';
+        const eventPath = eventId ? `/events/${pathTitle}?id=${encodeURIComponent(String(eventId))}` : `/events/${pathTitle}`;
+        card.href = eventPath;
         card.className = 'box';
+        card.setAttribute('data-event-id', String(eventId ?? ''));
         card.style.textDecoration = 'none';
         card.style.color = 'inherit';
         const imageUrl = event.coverImage || event.bannerImage;
@@ -68,6 +79,19 @@ import { api, getApiBaseUrl } from '@/lib/api';
           <h3>${event.title || 'Evento sin título'}</h3>
           <p>${formatArgentinaDate(event.startDate)} · ${formatLocation(event)}</p>
         `;
+        card.addEventListener('click', async (clickEvent) => {
+          if (!eventId) return;
+          clickEvent.preventDefault();
+          try {
+            await fetch(`${baseApiUrl}/events/${encodeURIComponent(String(eventId))}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            window.location.href = eventPath;
+          } catch (error) {
+            console.error('No se pudo cargar el evento:', error);
+            window.location.href = eventPath;
+          }
+        });
         results.appendChild(card);
       });
     };

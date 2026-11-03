@@ -1,0 +1,41 @@
+---
+import AuthLayout from '@/layouts/AuthLayout.astro';
+---
+
+<AuthLayout title="Iniciando sesión">
+  <div class="box" style="max-width:420px; margin: 2rem auto;">
+    <h2>Finalizando acceso</h2>
+    <p id="google-status">Procesando tu sesión con Google...</p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const accessToken = params.get('accessToken');
+    const refreshToken = params.get('refreshToken');
+    const statusEl = document.getElementById('google-status');
+
+    const setStatus = (message: string, isError = false) => {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.style.color = isError ? '#b42318' : '#1d6f42';
+    };
+
+    if (accessToken) {
+      const payload = JSON.stringify({ accessToken, refreshToken, user: {} });
+      localStorage.setItem('meetia-auth', payload);
+      localStorage.setItem('meetia-access-token', accessToken);
+      localStorage.setItem('accessToken', accessToken);
+      if (refreshToken) {
+        localStorage.setItem('meetia-refresh-token', refreshToken);
+        localStorage.setItem('refreshToken', refreshToken);
+      }
+      setStatus('Inicio de sesión correcto. Redirigiendo...');
+      window.location.href = '/dashboard';
+    } else {
+      setStatus('No se recibió una sesión válida de Google.', true);
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1500);
+    }
+  </script>
+</AuthLayout>

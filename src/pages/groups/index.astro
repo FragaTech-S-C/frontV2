@@ -9,23 +9,17 @@ import AppLayout from '@/layouts/AppLayout.astro';
   <div id="groups-list" class="grid"></div>
 
   <script>
-    (() => {
-      const list = document.getElementById('groups-list');
-      const groups = JSON.parse(localStorage.getItem('meetia-groups') || '[]');
-      const slugify = (value = '') => String(value)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'grupo';
+    import { api } from '@/lib/api';
 
-      if (!list) return;
+    const list = document.getElementById('groups-list');
+    if (!list) throw new Error('Missing groups list root');
 
+    const renderGroups = (groups) => {
       if (!groups.length) {
         list.innerHTML = `
           <div class="box">
             <h3>Sin grupos todavía</h3>
-            <p>Crea tu primer espacio personal o institucional para comenzar.</p>
+            <p>Aún no pertenecés a ningún grupo o no recibiste invitaciones.</p>
           </div>
         `;
         return;
@@ -33,25 +27,40 @@ import AppLayout from '@/layouts/AppLayout.astro';
 
       list.innerHTML = groups
         .map((group: any) => {
-          const isInstitutional = group.type === 'institutional';
+          const isInstitutional = group.institutionId || group.type === 'institutional';
           const label = isInstitutional ? 'Institucional' : 'Personal';
-          const slug = group.slug || slugify(group.name || 'grupo');
           const avatarMarkup = group.avatar
             ? `<img src="${group.avatar}" alt="${group.name}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;" />`
             : `<div style="display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:#e6e7ff;color:#293a70;font-weight:700;">${group.name?.charAt(0) ?? 'G'}</div>`;
 
           return `
-            <a class="box" href="/groups/${slug}" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;">
+            <a class="box" href="/groups/${encodeURIComponent(group.id)}" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;">
               ${avatarMarkup}
               <div>
                 <h3 style="margin:0 0 4px;">${group.name}</h3>
-                <p style="margin:0;">${label} · Líder: ${group.leader || 'Yo'}</p>
+                <p style="margin:0;">${label} · Líder: ${group.owner?.firstName || 'Yo'}</p>
                 <small>${group.institutionId ? 'Institución asociada' : 'Grupo personal'}</small>
               </div>
             </a>
           `;
         })
         .join('');
-    })();
+    };
+
+    const loadGroups = async () => {
+      try {
+        const groups = await api.getGroups();
+        renderGroups(Array.isArray(groups) ? groups : []);
+      } catch (error) {
+        list.innerHTML = `
+          <div class="box">
+            <h3>No se pudieron cargar tus grupos</h3>
+            <p>${error instanceof Error ? error.message : 'Intentalo nuevamente más tarde.'}</p>
+          </div>
+        `;
+      }
+    };
+
+    loadGroups();
   </script>
 </AppLayout>

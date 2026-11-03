@@ -1,0 +1,62 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+export const prerender = false;
+const rawEventId = Astro.url.searchParams.get('id') || Astro.params.id || '';
+const routeLatParam = Astro.url.searchParams.get('lat');
+const routeLngParam = Astro.url.searchParams.get('lng');
+const routeLat = routeLatParam !== null && routeLatParam !== '' ? Number(routeLatParam) : Number.NaN;
+const routeLng = routeLngParam !== null && routeLngParam !== '' ? Number(routeLngParam) : Number.NaN;
+---
+<AppLayout title="Ruta del evento">
+  <div class="box">
+    <h2>Ubicación del evento</h2>
+    <iframe
+      id="route-map"
+      title="Mapa de la ubicación del evento"
+      src={`https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(String(-58.5200))}%2C${encodeURIComponent(String(-34.7000))}%2C${encodeURIComponent(String(-58.2600))}%2C${encodeURIComponent(String(-34.4800))}&layer=mapnik&marker=${encodeURIComponent(String(Number.isFinite(routeLat) ? routeLat : -34.6037))}%2C${encodeURIComponent(String(Number.isFinite(routeLng) ? routeLng : -58.3816))}`}
+      style="height: 480px; width: 100%; border: 0; border-radius: 16px;"
+      loading="lazy"
+    ></iframe>
+    <p id="route-status" aria-live="polite"></p>
+    <a class="btn out" href={rawEventId ? `/events/${encodeURIComponent(rawEventId)}` : '/dashboard'}>Volver al evento</a>
+  </div>
+
+  <script define:vars={{ eventId: rawEventId, initialLat: Number.isFinite(routeLat) ? routeLat : null, initialLng: Number.isFinite(routeLng) ? routeLng : null }}>
+    import { api } from '@/lib/api';
+
+    const setStatus = (message, isError = false) => {
+      const status = document.getElementById('route-status');
+      if (!status) return;
+      status.textContent = message;
+      status.style.color = isError ? '#b42318' : '#1d6f42';
+    };
+
+    const eventKey = eventId || new URLSearchParams(window.location.search).get('id') || '';
+    if (!eventKey) {
+      setStatus('No se recibió el identificador del evento.', true);
+      throw new Error('Missing event id');
+    }
+
+    api.getEventsById(eventKey)
+      .then((event) => {
+        const payload = event?.event ?? event;
+        const lat = Number.isFinite(initialLat) ? initialLat : Number(payload?.latitude ?? payload?.location?.lat ?? payload?.location?.latitude ?? -34.6037);
+        const lng = Number.isFinite(initialLng) ? initialLng : Number(payload?.longitude ?? payload?.location?.lng ?? payload?.location?.longitude ?? -58.3816);
+        const title = payload?.title || 'Evento';
+        const locationText = [payload?.venueName, payload?.location, payload?.address, payload?.city, payload?.country].filter(Boolean).join(' · ') || 'Ubicación no definida';
+
+        setStatus(locationText);
+
+        const mapFrame = document.getElementById('route-map');
+        if (!mapFrame) return;
+        const bbox = [-58.52, -34.7, -58.26, -34.48];
+        const markerLat = Number.isFinite(lat) ? lat : -34.6037;
+        const markerLng = Number.isFinite(lng) ? lng : -58.3816;
+        mapFrame.src = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(String(bbox[0]))}%2C${encodeURIComponent(String(bbox[1]))}%2C${encodeURIComponent(String(bbox[2]))}%2C${encodeURIComponent(String(bbox[3]))}&layer=mapnik&marker=${encodeURIComponent(String(markerLat))}%2C${encodeURIComponent(String(markerLng))}`;
+        mapFrame.title = `${title} - ${locationText}`;
+      })
+      .catch((error) => {
+        setStatus(error instanceof Error ? error.message : 'No se pudo cargar la ubicación del evento.', true);
+      });
+  </script>
+</AppLayout>
