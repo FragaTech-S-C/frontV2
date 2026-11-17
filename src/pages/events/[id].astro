@@ -95,7 +95,7 @@ const routeKey = Astro.params.id ?? 'evento';
         </div>
         <div class="row">
           <a class="btn out" href="${routePath}/edit">Editar evento</a>
-          <button class="btn out" type="button">Dejar review</button>
+          <button class="btn out" type="button" id="review">Dejar review</button>
           <button class="btn out" type="button">Denunciar</button>
         </div>
       `;
@@ -103,15 +103,21 @@ const routeKey = Astro.params.id ?? 'evento';
       const confirmButton = document.getElementById('confirm') as HTMLButtonElement | null;
       const openInviteButton = document.getElementById('open-invite') as HTMLButtonElement | null;
       const closeInviteButton = document.getElementById('close-invite') as HTMLButtonElement | null;
+      const review = document.getElementById("review") as HTMLButtonElement;
+      const leaveButton = document.getElementById('leave_event') as HTMLButtonElement | null;
       const invitePanel = document.getElementById('invite-panel');
       const inviteSearch = document.getElementById('invite-search') as HTMLInputElement | null;
       const inviteStatus = document.getElementById('invite-status');
       const inviteResults = document.getElementById('invite-results');
-      const leaveButton = document.getElementById('leave_event') as HTMLButtonElement | null;
-
       const currentAuth = JSON.parse(localStorage.getItem('meetia-auth') || '{}');
       const currentUserId = currentAuth?.user?.id ?? currentAuth?.id;
+
+      //-----------------------------------------------------------
       let inviteOptions: InviteOption[] = [];
+
+      review.onclick = () => {
+        window.location.pathname = window.location.pathname + '/review'
+      }
 
       const setInviteStatus = (message: string, isError = false) => {
         if (!inviteStatus) return;

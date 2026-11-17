@@ -16,7 +16,7 @@ import AuthLayout from '@/layouts/AuthLayout.astro';
       </select>
     </label>
     <button class="btn" type="submit">Registrarme</button>
-    <a class="btn out" href={import.meta.env.PUBLIC_API_URL ? `${import.meta.env.PUBLIC_API_URL}/auth/google` : 'http://localhost:3000/api/auth/google'}>Registrarme con Google</a>
+    <!-- <a class="btn out" href={import.meta.env.PUBLIC_API_URL ? `${import.meta.env.PUBLIC_API_URL}/auth/google` : 'http://localhost:3000/api/auth/google'}>Registrarme con Google</a> -->
     <p id="register-status" aria-live="polite"></p>
     <p>¿Ya tenés cuenta? <a href="/login">Iniciá sesión</a></p>
   </form>

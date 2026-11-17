@@ -121,20 +121,20 @@ export const api = {
     return data;
   },
 
-  loginWithGoogle: async (profile: { email: string; firstName?: string; lastName?: string; nickname?: string; avatar?: string }) => {
-    const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/google`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(profile),
-    });
-    const data = await jsonOrText(response);
-    if (!response.ok) {
-      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo iniciar sesión con Google.');
-    }
-    setStoredAuth(data);
-    return data;
-  },
+//   loginWithGoogle: async (profile: { email: string; firstName?: string; lastName?: string; nickname?: string; avatar?: string }) => {
+//     const baseUrl = getApiBaseUrl();
+//     const response = await fetch(`${baseUrl}/auth/google`, {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify(profile),
+//     });
+//     const data = await jsonOrText(response);
+//     if (!response.ok) {
+//       throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudo iniciar sesión con Google.');
+//     }
+//     setStoredAuth(data);
+//     return data;
+//   },
 
   requestPasswordReset: async (email: string) => {
     const baseUrl = getApiBaseUrl();
@@ -359,8 +359,9 @@ export const api = {
   getGroups: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/groups`, {
+    const response = await fetch(`${baseUrl}/groups/getAll`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      method: 'GET'
     });
     const data = await jsonOrText(response);
     if (!response.ok) {
@@ -372,7 +373,7 @@ export const api = {
   createGroup: async (payload: Record<string, unknown>) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/groups`, {
+    const response = await fetch(`${baseUrl}/groups/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -477,25 +478,30 @@ export const api = {
     return data;
   },
 
-  getInvitations: async (userId?: string) => {
+  getPendingInvitations: async (userId?: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
     const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
-    const response = await fetch(`${baseUrl}/invitations?userId=${encodeURIComponent(resolvedUserId)}`, {
+    const response = await fetch(`${baseUrl}/invitations/requests?userId=${encodeURIComponent(resolvedUserId)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
     if (!response.ok) {
-      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las invitaciones.');
+      throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las invitaciones pendientes.');
     }
     return data;
+  },
+
+  getInvitations: async (userId?: string) => {
+    return api.getPendingInvitations(userId);
   },
 
   respondToInvitation: async (id: string, status: 'accepted' | 'rejected', userId?: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
     const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
-    const response = await fetch(`${baseUrl}/invitations/${id}/${status}?userId=${encodeURIComponent(resolvedUserId)}`, {
+    const endpoint = status === 'accepted' ? 'accept' : 'reject';
+    const response = await fetch(`${baseUrl}/invitations/${encodeURIComponent(id)}/${endpoint}?userId=${encodeURIComponent(resolvedUserId)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -506,11 +512,13 @@ export const api = {
     return data;
   },
 
-  createReview: async (payload: { eventId: string; userId: string; rating: number; comment: string }) => {
+  createReview: async (payload: { email: string; eventId: string; rating: number; comment: string; images?: File }) => {
     const baseUrl = getApiBaseUrl();
+    const token = getAccessToken();
     const response = await fetch(`${baseUrl}/reviews`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    //   headers: { 'Content-Type': 'application/json' },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: JSON.stringify(payload),
     });
     const data = await jsonOrText(response);
