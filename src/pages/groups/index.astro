@@ -13,7 +13,6 @@ import AppLayout from '@/layouts/AppLayout.astro';
 
     const list = document.getElementById('groups-list');
     if (!list) throw new Error('Missing groups list root');
-
     const renderGroups = (groups) => {
       if (!groups.length) {
         list.innerHTML = `
@@ -50,6 +49,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
     const loadGroups = async () => {
       try {
         const groups = await api.getGroups();
+        console.log(groups);
         renderGroups(Array.isArray(groups) ? groups : []);
       } catch (error) {
         list.innerHTML = `

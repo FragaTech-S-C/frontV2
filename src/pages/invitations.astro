@@ -126,7 +126,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
       }
 
       try {
-        const invitations = await api.getInvitations(currentUserId);
+        const invitations = await api.getPendingInvitations(currentUserId);
         const items = Array.isArray(invitations) ? invitations.filter((item) => item.type !== 'friend') : [];
 
         if (!items.length) {
@@ -135,14 +135,17 @@ import AppLayout from '@/layouts/AppLayout.astro';
         }
 
         const markup = items.map((invitation) => {
-          const title = invitation.title || (invitation.type === 'event' ? 'Invitación a evento' : 'Invitación a grupo');
-          const description = invitation.message || invitation.text || 'Te invitaron a participar.';
+          const sender = invitation.sender || {};
+          const senderName = getUserDisplayName(sender);
+          const typeLabel = invitation.type === 'event' ? 'evento' : invitation.type === 'group' ? 'grupo' : 'invitación';
+          const title = invitation.title || `Invitación a ${typeLabel}`;
+          const description = invitation.message || invitation.text || `${senderName} te invitó a participar.`;
 
           return `
             <div class="invite-card">
               <div>
                 <strong>${title}</strong>
-                <p>${description}</p>
+                <p>${senderName}: ${description}</p>
               </div>
               <div class="invite-actions">
                 <button class="btn small" type="button" data-type="event" data-id="${invitation.id}" data-action="accepted">Aceptar</button>

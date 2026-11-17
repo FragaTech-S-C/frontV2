@@ -238,7 +238,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
         };
 
         const createdGroup = await api.createGroup(payload);
-
+        console.log(createdGroup);
         const notifications = JSON.parse(localStorage.getItem('meetia-notifications') || '[]');
         const inviteNotifications = selectedMembers.map((member) => ({
           title: 'Invitación al grupo',

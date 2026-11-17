@@ -1,0 +1,64 @@
+---
+import AppLayout from "@/layouts/AppLayout.astro";
+---
+<AppLayout>
+    <div>
+        <h2> Como desea valorar el evento? </h2>
+        <form action="" method="get">
+            <label> Escriba su resena...
+                <input type="text" id="InputReview" placeholder="Inserte su opinion del evento" required>
+            </label>
+        
+            <label>
+                Que puntaje le das al evento?
+                <!-- <input type="range" name="rating" id="eventRating"> -->
+                 <input type="number" name="rating" id="eventRating" min="1" max="10" required>
+            </label>
+            <label>
+                Escriba un email notificarlo.
+                <input type="email" name="userEmail" id="REmail" required>
+            </label>
+            <label> 
+                Desea agregar imagenes?
+                <input type="file">
+            </label>
+            <label>
+                <button type="submit" id="submitBttn" disabled>Enviar Resena</button>
+            </label>
+        </form>
+    </div>
+    <div>
+    </div>
+</AppLayout>
+<script>
+import { api } from "@/lib/api";
+// import { Error } from "@/pages/error.astro";
+
+    document.title = "Review Event"
+    const subBttn = document.getElementById("submitBttn") as HTMLButtonElement;
+    const reviewBox = document.getElementById("InputReview") as HTMLInputElement;
+    const rating = document.getElementById('eventRating') as HTMLInputElement;
+    let ratingValue = Number(rating.value)
+    const email = document.getElementById('REmail') as HTMLInputElement;
+    const { id } = Astro.params;
+
+    rating.addEventListener("input", () => {
+        if (ratingValue > 10)
+            ratingValue = 10;
+    });
+    const submitReview = async () => {
+        try {
+            await api.createReview({
+                comment: reviewBox.value,
+                eventId: id ?? "",
+                rating:  ratingValue,
+                email: email.value
+            })
+        } catch (error) {
+            console.error(error);
+            return Error
+        }
+    }
+    subBttn.addEventListener('click', submitReview)
+
+</script>
