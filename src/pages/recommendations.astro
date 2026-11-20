@@ -14,7 +14,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
         status.style.display = 'block';
         status.textContent = 'La API no está configurada. Agregá PUBLIC_API_URL o BACKEND_URL en tu entorno.';
       }
-    } else {
+    } else 
       const token = localStorage.getItem('meetia-access-token');
       const grid = document.getElementById('recommendations-grid');
       const status = document.getElementById('recommendations-status');
