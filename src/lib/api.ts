@@ -5,6 +5,17 @@ type AuthPayload = {
   [key: string]: unknown;
 };
 
+async function apiFetch(url: string, options?: RequestInit) {
+  try {
+    const res = await fetch(url, options);
+    if (res.status >= 500) window.location.href = '/timeout';
+    return res;
+  } catch (error) {
+    window.location.href = '/timeout';
+    throw error;
+  }
+}
+
 export function getApiBaseUrl() {
   const runtimeApiBaseUrl =
     (typeof import.meta !== 'undefined' && import.meta.env)
@@ -91,7 +102,7 @@ async function jsonOrText(response: Response) {
 export const api = {
   login: async (credentials: { email: string; password: string; twoFactorCode?: string }) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/login`, {
+    const response = await apiFetch(`${baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials),
@@ -106,7 +117,7 @@ export const api = {
 
   register: async (payload: Record<string, unknown>) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/register`, {
+    const response = await apiFetch(`${baseUrl}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -123,7 +134,7 @@ export const api = {
 
   loginWithGoogle: async (profile: { email: string; firstName?: string; lastName?: string; nickname?: string; avatar?: string }) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/google`, {
+    const response = await apiFetch(`${baseUrl}/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
@@ -138,7 +149,7 @@ export const api = {
 
   requestPasswordReset: async (email: string) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/password/request`, {
+    const response = await apiFetch(`${baseUrl}/auth/password/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
@@ -152,7 +163,7 @@ export const api = {
 
   confirmPasswordReset: async (token: string, newPassword: string) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/password/confirm`, {
+    const response = await apiFetch(`${baseUrl}/auth/password/confirm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, newPassword }),
@@ -166,7 +177,7 @@ export const api = {
 
   resetPasswordByEmail: async (email: string, newPassword: string, token?: string) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/password/reset`, {
+    const response = await apiFetch(`${baseUrl}/auth/password/reset`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, newPassword, token }),
@@ -181,7 +192,7 @@ export const api = {
   authMe: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/auth/me`, {
+    const response = await apiFetch(`${baseUrl}/auth/me`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -194,7 +205,7 @@ export const api = {
   me: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/users/me`, {
+    const response = await apiFetch(`${baseUrl}/users/me`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -207,7 +218,7 @@ export const api = {
   updateProfile: async (payload: Record<string, unknown>) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/users/me`, {
+    const response = await apiFetch(`${baseUrl}/users/me`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -225,7 +236,7 @@ export const api = {
   resetPassword: async (currentPassword: string, newPassword: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/auth/reset-password`, {
+    const response = await apiFetch(`${baseUrl}/auth/reset-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -242,7 +253,7 @@ export const api = {
 
   refresh: async (refreshToken: string) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/refresh`, {
+    const response = await apiFetch(`${baseUrl}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
@@ -258,7 +269,7 @@ export const api = {
   logout: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/auth/logout`, {
+    const response = await apiFetch(`${baseUrl}/auth/logout`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -285,7 +296,7 @@ export const api = {
     const token = getAccessToken();
     const query = new URLSearchParams();
     if (userId) query.set('userId', userId);
-    const response = await fetch(`${baseUrl}/notifications${query.toString() ? `?${query.toString()}` : ''}`, {
+    const response = await apiFetch(`${baseUrl}/notifications${query.toString() ? `?${query.toString()}` : ''}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -300,7 +311,7 @@ export const api = {
     const token = getAccessToken();
     const search = new URLSearchParams();
     if (userId) search.set('userId', userId);
-    const response = await fetch(`${baseUrl}/notifications/${id}/read${search.toString() ? `?${search.toString()}` : ''}`, {
+    const response = await apiFetch(`${baseUrl}/notifications/${id}/read${search.toString() ? `?${search.toString()}` : ''}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -315,7 +326,7 @@ export const api = {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
     const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
-    const response = await fetch(`${baseUrl}/friends?userId=${encodeURIComponent(resolvedUserId)}`, {
+    const response = await apiFetch(`${baseUrl}/friends?userId=${encodeURIComponent(resolvedUserId)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -328,7 +339,7 @@ export const api = {
   getInstitutions: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/institutions`, {
+    const response = await apiFetch(`${baseUrl}/institutions`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -341,7 +352,7 @@ export const api = {
   createInstitution: async (payload: Record<string, unknown>) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/institutions`, {
+    const response = await apiFetch(`${baseUrl}/institutions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -359,7 +370,7 @@ export const api = {
   getGroups: async () => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/groups`, {
+    const response = await apiFetch(`${baseUrl}/groups`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -372,7 +383,7 @@ export const api = {
   createGroup: async (payload: Record<string, unknown>) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/groups`, {
+    const response = await apiFetch(`${baseUrl}/groups`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -391,7 +402,7 @@ export const api = {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
     const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
-    const response = await fetch(`${baseUrl}/friends/requests?userId=${encodeURIComponent(resolvedUserId)}`, {
+    const response = await apiFetch(`${baseUrl}/friends/requests?userId=${encodeURIComponent(resolvedUserId)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -406,7 +417,7 @@ export const api = {
     const token = getAccessToken();
     const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
     const endpoint = status === 'accepted' ? `${id}/accept` : `${id}/reject`;
-    const response = await fetch(`${baseUrl}/friends/${endpoint}?userId=${encodeURIComponent(resolvedUserId)}`, {
+    const response = await apiFetch(`${baseUrl}/friends/${endpoint}?userId=${encodeURIComponent(resolvedUserId)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -420,7 +431,7 @@ export const api = {
   searchUsersByEmail: async (email: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/users/search?email=${encodeURIComponent(email.trim())}`, {
+    const response = await apiFetch(`${baseUrl}/users/search?email=${encodeURIComponent(email.trim())}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -433,7 +444,7 @@ export const api = {
   addFriend: async (userId: string, friendEmail: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/friends/request`, {
+    const response = await apiFetch(`${baseUrl}/friends/request`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -451,7 +462,7 @@ export const api = {
   removeFriend: async (friendshipId: string, userId: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/friends/${encodeURIComponent(friendshipId)}?userId=${encodeURIComponent(userId)}`, {
+    const response = await apiFetch(`${baseUrl}/friends/${encodeURIComponent(friendshipId)}?userId=${encodeURIComponent(userId)}`, {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -465,7 +476,7 @@ export const api = {
   addMemberToGroup: async (groupId: string, userId: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {
+    const response = await apiFetch(`${baseUrl}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -481,7 +492,7 @@ export const api = {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
     const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
-    const response = await fetch(`${baseUrl}/invitations?userId=${encodeURIComponent(resolvedUserId)}`, {
+    const response = await apiFetch(`${baseUrl}/invitations?userId=${encodeURIComponent(resolvedUserId)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -495,7 +506,7 @@ export const api = {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
     const resolvedUserId = String(userId ?? getStoredAuth()?.user?.id ?? 'local-user');
-    const response = await fetch(`${baseUrl}/invitations/${id}/${status}?userId=${encodeURIComponent(resolvedUserId)}`, {
+    const response = await apiFetch(`${baseUrl}/invitations/${id}/${status}?userId=${encodeURIComponent(resolvedUserId)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -508,7 +519,7 @@ export const api = {
 
   createReview: async (payload: { eventId: string; userId: string; rating: number; comment: string }) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/reviews`, {
+    const response = await apiFetch(`${baseUrl}/reviews`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -522,7 +533,7 @@ export const api = {
 
   getReviews: async (eventId: string) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/reviews?eventId=${encodeURIComponent(eventId)}`);
+    const response = await apiFetch(`${baseUrl}/reviews?eventId=${encodeURIComponent(eventId)}`);
     const data = await jsonOrText(response);
     if (!response.ok) {
       throw new Error(typeof data === 'string' ? data : data?.message || data?.error || 'No se pudieron cargar las reseñas.');
@@ -532,7 +543,7 @@ export const api = {
 
   createReport: async (payload: { reporterId: string; targetType: 'event' | 'group' | 'user' | 'comment'; targetId: string; subject: string; message: string }) => {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/reports`, {
+    const response = await apiFetch(`${baseUrl}/reports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -547,7 +558,7 @@ export const api = {
   attendEvent: async (eventId: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/events/${eventId}/attend`, {
+    const response = await apiFetch(`${baseUrl}/events/${eventId}/attend`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -561,7 +572,7 @@ export const api = {
   confirmAssistance: async (eventId: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/events/${eventId}/confirm-assistance`, {
+    const response = await apiFetch(`${baseUrl}/events/${eventId}/confirm-assistance`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -575,7 +586,7 @@ export const api = {
   leaveEvent: async (eventId: string) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/events/${eventId}/leave`, {
+    const response = await apiFetch(`${baseUrl}/events/${eventId}/leave`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -593,7 +604,7 @@ export const api = {
 
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/events/${eventId}/invite`, {
+    const response = await apiFetch(`${baseUrl}/events/${eventId}/invite`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -619,7 +630,7 @@ export const api = {
       method: 'GET',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
-    const response = await fetch(`${baseUrl}/events/${encodeURIComponent(eventId)}`, {
+    const response = await apiFetch(`${baseUrl}/events/${encodeURIComponent(eventId)}`, {
       method: 'GET',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -642,7 +653,7 @@ export const api = {
     const query = search.toString();
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/events${query ? `?${query}` : ''}`, {
+    const response = await apiFetch(`${baseUrl}/events${query ? `?${query}` : ''}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     const data = await jsonOrText(response);
@@ -655,7 +666,7 @@ export const api = {
   createEvent: async (payload: Record<string, unknown>) => {
     const baseUrl = getApiBaseUrl();
     const token = getAccessToken();
-    const response = await fetch(`${baseUrl}/events/create`, {
+    const response = await apiFetch(`${baseUrl}/events/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
