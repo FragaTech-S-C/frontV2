@@ -6,7 +6,7 @@ import AppLayout from '@/layouts/AppLayout.astro';
   <div id="recommendations-status" class="box" style="margin-bottom:1rem;display:none"></div>
   <div id="recommendations-grid" class="grid"></div>
 
-  <script is:inline define:vars={{ apiBase: (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '') }}>
+<script is:inline define:vars={{ apiBase: (import.meta.env.PUBLIC_API_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '') }}>
     const baseApiUrl = String(apiBase || 'http://localhost:3000/api').replace(/\/+$/, '');
     if (!baseApiUrl) {
       const status = document.getElementById('recommendations-status');
@@ -14,21 +14,20 @@ import AppLayout from '@/layouts/AppLayout.astro';
         status.style.display = 'block';
         status.textContent = 'La API no está configurada. Agregá PUBLIC_API_URL o BACKEND_URL en tu entorno.';
       }
-      return;
-    }
-    const token = localStorage.getItem('meetia-access-token');
-    const grid = document.getElementById('recommendations-grid');
-    const status = document.getElementById('recommendations-status');
+    } else {
+      const token = localStorage.getItem('meetia-access-token');
+      const grid = document.getElementById('recommendations-grid');
+      const status = document.getElementById('recommendations-status');
 
-    const formatArgentinaDate = (value) => {
-      if (!value) return 'Sin fecha';
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return 'Sin fecha';
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}-${month}-${year}`;
-    };
+      const formatArgentinaDate = (value) => {
+        if (!value) return 'Sin fecha';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return 'Sin fecha';
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}-${month}-${year}`;
+      };
 
     const formatLocation = (event) => {
       const parts = [event.location, event.city, event.country, event.address].filter(Boolean);
